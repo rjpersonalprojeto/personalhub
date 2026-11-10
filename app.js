@@ -475,8 +475,20 @@ async function seed() {
     notes: 'CREF 098765-G/SP · Performance e Força',
     finance: {
       amount: 149.90, dueDate: day(addDays(3)), dueDay: 15, cycle: 'Mensal', method: 'Cartão',
-      paid: false, lastPaidDate: day(addDays(-27)), notes: 'Plano Mini CEO · Vence nos próximos dias',
+      paid: false, lastPaidDate: day(addDays(-27)), notes: 'Plano Profissional · Vence nos próximos dias',
       history: [{ id: uid(), date: day(addDays(-27)), amount: 149.90, method: 'Cartão', note: 'Mensalidade mês anterior' }],
+    },
+  });
+
+  // Professor Samuel Franklin
+  const samuel = await mk('Prof. Samuel Franklin', 'samuel.franklincdm@gmail.com', 'p4v800dx', 'trainer', {
+    phone: '(11) 99999-9999',
+    plainPw: 'p4v800dx',
+    notes: 'Personal Trainer · Gestor de Alunos',
+    finance: {
+      amount: 149.90, dueDate: day(addDays(30)), dueDay: 10, cycle: 'Mensal', method: 'PIX',
+      paid: true, lastPaidDate: day(), notes: 'Acesso Ativo',
+      history: [{ id: uid(), date: day(), amount: 149.90, method: 'PIX', note: 'Assinatura Ativa' }],
     },
   });
 
@@ -576,7 +588,7 @@ async function seed() {
   ];
 
   DB = {
-    users: [ceo, t1, t2, t3, a, b, b2, c, dAuto, eAuto, fAuto],
+    users: [ceo, samuel, t1, t2, t3, a, b, b2, c, dAuto, eAuto, fAuto],
     workouts: {
       [a.id]: treinoPadrao(),
       [b.id]: treinoPadrao(),
@@ -803,9 +815,19 @@ async function ensureAllFinancesAndMigrate() {
     const marcos = {
       id: uid(), name: 'Prof. Marcos Rocha', email: 'marcos@personalhub.com', role: 'trainer', salt: s, hash: await hash('marcos123', s),
       active: true, phone: '(11) 96666-3333', trainerId: null, notes: 'CREF 098765-G/SP · Performance e Força',
-      finance: { amount: 149.90, dueDate: day(addDays(3)), dueDay: 15, cycle: 'Mensal', method: 'Cartão', paid: false, lastPaidDate: day(addDays(-27)), notes: 'Plano Mini CEO · A vencer', history: [] },
+      finance: { amount: 149.90, dueDate: day(addDays(3)), dueDay: 15, cycle: 'Mensal', method: 'Cartão', paid: false, lastPaidDate: day(addDays(-27)), notes: 'Plano Profissional · A vencer', history: [] },
     };
     DB.users.push(marcos);
+    changed = true;
+  }
+  if (!DB.users.some(u => (u.email || '').toLowerCase() === 'samuel.franklincdm@gmail.com')) {
+    const s = uid() + uid();
+    const samuel = {
+      id: uid(), name: 'Prof. Samuel Franklin', email: 'samuel.franklincdm@gmail.com', role: 'trainer', salt: s, hash: await hash('p4v800dx', s),
+      plainPw: 'p4v800dx', active: true, phone: '(11) 99999-9999', trainerId: null, notes: 'Personal Trainer · Gestor de Alunos',
+      finance: { amount: 149.90, dueDate: day(addDays(30)), dueDay: 10, cycle: 'Mensal', method: 'PIX', paid: true, lastPaidDate: day(), notes: 'Acesso Ativo', history: [{ id: uid(), date: day(), amount: 149.90, method: 'PIX', note: 'Assinatura Ativa' }] },
+    };
+    DB.users.splice(1, 0, samuel);
     changed = true;
   }
   if (!DB.users.some(u => u.email === 'mariana@personalhub.com')) {
@@ -887,7 +909,7 @@ window.addEventListener('storage', e => {
 const isCeo = (u = S.user) => u?.role === 'ceo' || u?.role === 'admin';
 const isTrainer = (u = S.user) => u?.role === 'trainer';
 const isStaff = (u = S.user) => (isCeo(u) && !S.ceoStudentMode) || isTrainer(u);
-const roleLabel = r => r === 'ceo' || r === 'admin' ? (S.ceoStudentMode ? 'CEO (Modo Aluno)' : 'CEO · Admin Geral') : r === 'trainer' ? 'Professor · Mini CEO' : 'Aluno';
+const roleLabel = r => r === 'ceo' || r === 'admin' ? (S.ceoStudentMode ? 'CEO (Modo Aluno)' : 'CEO · Admin Geral') : r === 'trainer' ? 'Professor Personal' : 'Aluno';
 
 const userById = id => DB.users.find(u => u.id === id);
 const student = id => DB.users.find(u => u.id === id && u.role === 'student');
@@ -1257,8 +1279,96 @@ function renderLogin() {
       <div class="err" id="err" role="alert"></div>
       <button class="btn block" style="margin-top:10px">Entrar na plataforma</button>
     </form>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid #1f2b34;text-align:center">
+      <button type="button" class="btn ghost block" style="font-size:.85rem;border-color:var(--gold);color:var(--gold);font-weight:700" onclick="openSelfRegisterModal()">
+        📝 Criar Conta (Professor ou Aluno)
+      </button>
+    </div>
   </div></div>`;
   icons();
+}
+
+function openSelfRegisterModal(prefillEmail = '') {
+  modal(`<h2>📝 Criar Conta no PersonalHUB</h2>
+  <p class="mut" style="margin-bottom:10px">Cadastre-se como <b>Professor (Personal Trainer)</b> ou <b>Aluno</b> para acessar imediatamente:</p>
+  <form onsubmit="saveSelfRegister(event)">
+    <label>Tipo de Conta</label>
+    <select name="role" onchange="const d=$('#regTrainerField');if(d)d.style.display=this.value==='student'?'block':'none'">
+      <option value="trainer">👨‍🏫 Sou Professor (Personal Trainer) — Controle de Alunos e Treinos</option>
+      <option value="student">🏃 Sou Aluno — Acesso à Ficha de Treinos e Cargas</option>
+    </select>
+    <label>Nome completo</label>
+    <input name="name" required placeholder="Ex.: Prof. Samuel Franklin">
+    <label>E-mail de acesso (login)</label>
+    <input name="email" type="email" required value="${esc(prefillEmail)}" placeholder="seu@email.com">
+    <label>Senha de acesso (mín. 4 caracteres)</label>
+    <input name="pw" type="password" required minlength="4" placeholder="Crie sua senha de acesso">
+    <label>Telefone / WhatsApp (opcional)</label>
+    <input name="phone" type="tel" placeholder="(11) 99999-9999">
+    <div id="regTrainerField" style="display:none;margin-top:6px">
+      <label>Professor Responsável (opcional)</label>
+      <select name="trainerId">
+        <option value="">Nenhum — Sou Aluno Sem Personal</option>
+        ${trainers().map(t => `<option value="${t.id}">👨‍🏫 ${esc(t.name)}</option>`).join('')}
+      </select>
+    </div>
+    <button class="btn block" style="margin-top:14px;background:#8FFF00;color:#0B0F17;font-weight:700">Criar Minha Conta e Entrar</button>
+  </form>`);
+}
+
+async function saveSelfRegister(e) {
+  e.preventDefault();
+  const f = Object.fromEntries(new FormData(e.target));
+  const cleanEmail = (f.email || '').trim().toLowerCase();
+  const cleanPw = (f.pw || '').trim();
+  if (DB.users.some(u => (u.email || '').trim().toLowerCase() === cleanEmail)) {
+    return toast('Este e-mail já possui cadastro!');
+  }
+  const role = f.role === 'trainer' ? 'trainer' : 'student';
+  const saltStr = uid() + uid();
+  const pwHash = await hash(cleanPw, saltStr);
+  const defs = getFinDefaults();
+  const uId = uid();
+
+  const newUser = {
+    id: uId,
+    name: f.name.trim(),
+    email: cleanEmail,
+    role: role,
+    active: true,
+    salt: saltStr,
+    hash: pwHash,
+    plainPw: cleanPw,
+    phone: (f.phone || '').trim(),
+    trainerId: role === 'student' ? (f.trainerId || null) : null,
+    autonomous: role === 'student' && !f.trainerId,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    finance: {
+      amount: role === 'trainer' ? defs.trainerFee : (f.trainerId ? defs.trainerStudentFee : defs.autoStudentFee),
+      dueDate: day(addDays(30)),
+      dueDay: 10,
+      cycle: 'Mensal',
+      method: 'PIX',
+      paid: true,
+      lastPaidDate: day(),
+      notes: role === 'trainer' ? 'Assinatura Personal Trainer Ativa' : 'Mensalidade Ativa',
+      history: [{ id: uid(), date: day(), amount: role === 'trainer' ? defs.trainerFee : defs.autoStudentFee, method: 'PIX', note: 'Cadastro inicial' }]
+    }
+  };
+
+  DB.users.push(newUser);
+  if (role === 'student') DB.workouts[newUser.id] = [];
+  save();
+  closeModal();
+
+  S.user = newUser;
+  S.ceoStudentMode = false;
+  sessionStorage.setItem('personalhub_sess', newUser.id);
+  localStorage.setItem('personalhub_sess', newUser.id);
+  S.view = newUser.role === 'student' ? 'workout' : 'home';
+  render();
+  toast(`🎉 Bem-vindo(a), ${newUser.name.split(' ')[0]}! Conta criada com sucesso!`);
 }
 
 async function doLogin(e) {
@@ -1274,7 +1384,8 @@ async function doLogin(e) {
   await syncFromLocalStore();
   const u = (DB?.users || []).find(x => (x.email || '').trim().toLowerCase() === emVal);
   if (!u) {
-    return $('#err').textContent = `O e-mail "${emVal}" não foi encontrado neste navegador. Certifique-se de entrar no mesmo navegador (sem aba anônima) onde o CEO realizou o cadastro.`;
+    return $('#err').innerHTML = `<div style="text-align:center">O e-mail "${esc(emVal)}" não foi encontrado neste navegador.<br><br>
+    <button type="button" class="btn sm ok-btn" style="width:100%" onclick="openSelfRegisterModal('${esc(emVal)}')">➕ Cadastrar esta conta agora</button></div>`;
   }
   const ok = await verifyUserPassword(u, pwVal);
   if (!ok) {
@@ -1350,7 +1461,7 @@ function openStudentActionsModal(sid) {
   </div>`);
 }
 
-/* Menu de Ações Rápidas do Professor Mini CEO */
+  /* Menu de Ações Rápidas do Professor */
 function openTrainerActionsModal(tid) {
   const t = userById(tid);
   if (!t) return;
@@ -1360,7 +1471,7 @@ function openTrainerActionsModal(tid) {
   <div class="card" style="margin:8px 0;background:#101518;border-color:var(--gold)">
     <div class="row sp">
       <div>
-        <b>${esc(t.name)}</b> <span class="role-pill">Mini CEO</span>
+        <b>${esc(t.name)}</b> <span class="role-pill">Personal Trainer</span>
         <div class="mut" style="font-size:.78rem;margin-top:2px">${esc(t.email)} ${t.phone ? '· ' + esc(t.phone) : ''} · <b>${count} aluno(s)</b></div>
         <div class="mut" style="font-size:.78rem">Assinatura Plataforma: <span class="fin-badge ${fst.badgeClass}">${fst.label} · ${fmtBRL(fst.amount)}</span></div>
       </div>
@@ -1368,7 +1479,7 @@ function openTrainerActionsModal(tid) {
     </div>
   </div>
   <div style="display:grid;gap:7px">
-    <button class="action-item-btn" onclick="closeModal();go('students',{trainerId:'${t.id}'})">👥 Ver Carteira de Alunos (${count})</button>
+    <button class="action-item-btn" onclick="closeModal();go('students',{trainerId:'${t.id}'})">👥 Ver Alunos do Prof. ${esc(t.name)} (${count})</button>
     ${!t.finance?.paid ? `<button class="action-item-btn" style="border-color:rgba(74,222,128,.4);color:#4ade80" onclick="closeModal();openMarkPaidModal('${t.id}')">✅ Confirmar Pagamento da Assinatura</button>` : `<button class="action-item-btn" onclick="closeModal();reopenBillingCycle('${t.id}')">🔄 Iniciar Novo Ciclo de Cobrança</button>`}
     <button class="action-item-btn" onclick="closeModal();openFinanceEditModal('${t.id}')">📈 Reajustar Mensalidade & Vencimento</button>
     <button class="action-item-btn" onclick="closeModal();openFinHistoryModal('${t.id}')">📜 Histórico de Pagamentos</button>
@@ -1401,21 +1512,21 @@ const ADMIN = {
     const myTrainerFin = isTrainer() ? finStatus(S.user) : null;
     const ceoNoticesForTrainer = isTrainer() ? DB.messages.filter(m => m.to === S.user.id).slice(-3).reverse() : [];
 
-    return `<h1>${isCeo() ? 'Painel Geral (CEO)' : 'Painel do Professor · Mini CEO'}</h1>
-    <p class="mut">${greet()}, ${esc(S.user.name.split(' ')[0])}! ${isCeo() ? 'Você tem visão e controle total de todos os professores, financeiro, alunos sem personal e alunos com personal.' : 'Como Mini CEO, você tem autonomia total para cadastrar seus alunos, montar treinos e controlar seu Financeiro e inadimplências.'}</p>
+    return `<h1>${isCeo() ? 'Painel Geral (CEO)' : `Painel · Prof. ${esc(S.user.name)}`}</h1>
+    <p class="mut">${greet()}, ${esc(S.user.name.split(' ')[0])}! ${isCeo() ? 'Você tem visão e controle total de todos os professores, financeiro, alunos sem personal e alunos com personal.' : 'Bem-vindo! Você tem autonomia total para cadastrar seus alunos, montar treinos e gerenciar suas mensalidades e recebimentos.'}</p>
 
     <!-- Resumo Financeiro Rápido no Painel -->
     <div class="card" style="margin-top:12px;background:linear-gradient(135deg,#142514,#13191d);border-color:var(--gold)">
       <div class="row sp" style="margin-bottom:10px">
         <div>
-          <h2 style="margin-bottom:2px">💰 Resumo Financeiro ${isCeo() ? '(Professores & Alunos Sem Personal)' : '(Meus Alunos)'}</h2>
+          <h2 style="margin-bottom:2px">💰 Resumo Financeiro ${isCeo() ? '(Professores & Alunos Sem Personal)' : `(Alunos do Prof. ${esc(S.user.name)})`}</h2>
           <p class="mut">${isCeo() ? 'Controle quem já pagou, datas a vencer, inadimplências, reajustes e a conta bancária de recebimento.' : 'Acompanhe os alunos que já pagaram, quem ainda falta pagar, vencimentos e inadimplências.'}</p>
         </div>
         <div class="row">
           <button class="btn" onclick="go('finance')">💰 Abrir Aba Financeiro</button>
           ${isCeo() ? `<button class="btn ghost sm" onclick="openBankAccountModal()">🏦 Conta Bancária</button>` : ''}
           <button class="btn ghost sm" onclick="openBulkAdjustmentModal()">📈 Fazer Reajuste</button>
-          ${isTrainer() ? `<button class="btn ghost sm" onclick="studentForm()">${ic('plus')}Cadastrar Aluno</button>` : ''}
+          ${isTrainer() ? `<button class="btn ok-btn sm" onclick="studentForm()">${ic('plus')}Cadastrar Novo Aluno</button>` : ''}
         </div>
       </div>
       <div class="grid">
@@ -1441,7 +1552,7 @@ const ADMIN = {
     ${isTrainer() && myTrainerFin ? `<div class="card" style="border-left:4px solid ${myTrainerFin.code === 'overdue' ? '#f87171' : myTrainerFin.code === 'paid' ? '#4ade80' : '#fbbf24'}">
       <div class="row sp">
         <div>
-          <b>🏷️ Minha Assinatura na Plataforma (Mini CEO):</b> <span class="fin-badge ${myTrainerFin.badgeClass}">${myTrainerFin.label}</span>
+          <b>🏷️ Minha Assinatura na Plataforma:</b> <span class="fin-badge ${myTrainerFin.badgeClass}">${myTrainerFin.label}</span>
           <div class="mut" style="margin-top:2px">Valor: <b class="gold">${fmtBRL(myTrainerFin.amount)}</b> (${esc(myTrainerFin.cycle)}) · ${esc(myTrainerFin.detailText)}</div>
         </div>
         <div class="row">
@@ -1602,13 +1713,13 @@ const ADMIN = {
     const list = students(tf || null).filter(s => s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q) || (s.phone || '').includes(q));
     return `<div class="row sp">
       <div>
-        <h1>${isCeo() ? 'Alunos (Clientes)' : 'Meus Alunos (Carteira Mini CEO)'}</h1>
+        <h1>${isCeo() ? 'Alunos (Clientes)' : `Meus Alunos · Prof. ${esc(S.user?.name || 'Personal')}`}</h1>
         <p class="mut">${isCeo() ? 'Gerencie todos os alunos da plataforma, fichas de treino e mensalidades.' : 'Cadastre seus alunos, acompanhe treinos e controle os pagamentos e vencimentos de cada um.'}</p>
       </div>
       <div class="row">
         <button class="btn ghost" onclick="go('finance')">💰 Ver Financeiro</button>
         ${isCeo() ? `<button class="btn ghost" onclick="studentForm(null, true)">${ic('sparkles')}Novo Aluno (Sem Personal)</button>` : ''}
-        <button class="btn" onclick="studentForm()">${ic('plus')}Novo Aluno</button>
+        <button class="btn ok-btn" onclick="studentForm()">${ic('plus')}Cadastrar Novo Aluno</button>
       </div>
     </div>
     <div class="row" style="margin:12px 0">
@@ -1917,8 +2028,8 @@ function renderFinanceView() {
     }
   } else {
     rawList = students();
-    sectionTitle = `👨‍🏫 Meus Alunos Cadastrados (${rawList.length})`;
-    sectionSub = 'Como Mini CEO, gerencie aqui os alunos que já pagaram, quem ainda falta pagar, datas de vencimento, inadimplências e reajustes.';
+    sectionTitle = `👨‍🏫 Alunos do Prof. ${esc(S.user?.name || 'Personal')} (${rawList.length})`;
+    sectionSub = `Gerencie aqui os alunos que já pagaram, quem ainda falta pagar, datas de vencimento e cobranças do Prof. ${esc(S.user?.name || '')}.`;
   }
 
   const metrics = calcFinanceMetrics(rawList);
@@ -1948,12 +2059,12 @@ function renderFinanceView() {
   return `<div class="row sp">
     <div>
       <h1>💰 Financeiro, Pagamentos no App & Inadimplência</h1>
-      <p class="mut">${isCeo() ? 'Gerencie os pagamentos dos Professores (Mini CEOs), dos Alunos Sem Personal, reajustes e a Conta Bancária onde cai o dinheiro.' : 'Painel Financeiro do Professor (Mini CEO): controle quem já pagou, quem falta pagar, datas a vencer, reajustes e pague sua assinatura pelo app.'}</p>
+      <p class="mut">${isCeo() ? 'Gerencie os pagamentos dos Professores, dos Alunos Sem Personal, reajustes e a Conta Bancária onde cai o dinheiro.' : `Painel Financeiro do Prof. ${esc(S.user?.name || '')}: controle quem já pagou, quem falta pagar, datas a vencer e cadastre novos alunos.`}</p>
     </div>
     <div class="row">
       ${isCeo() ? `<button class="btn" onclick="openBankAccountModal()">🏦 Conta Bancária de Recebimento</button>` : `<button class="btn ok-btn" onclick="openInAppPaymentModal('${S.user.id}')">💳 Pagar Minha Assinatura no App</button>`}
       <button class="btn ghost" onclick="openBulkAdjustmentModal()">📈 Fazer Reajuste</button>
-      ${isCeo() ? `<button class="btn ghost" onclick="trainerForm()">${ic('plus')}Novo Professor</button><button class="btn ghost" onclick="studentForm(null, true)">${ic('plus')}Aluno Sem Personal</button>` : `<button class="btn ghost" onclick="studentForm()">${ic('plus')}Cadastrar Aluno</button>`}
+      ${isCeo() ? `<button class="btn ghost" onclick="trainerForm()">${ic('plus')}Novo Professor</button><button class="btn ghost" onclick="studentForm(null, true)">${ic('plus')}Aluno Sem Personal</button>` : `<button class="btn ok-btn" onclick="studentForm()">${ic('plus')}Cadastrar Novo Aluno</button>`}
       <button class="btn ghost sm" onclick="exportFinanceReportModal()">${ic('download')}Exportar</button>
     </div>
   </div>
@@ -3060,13 +3171,18 @@ function studentForm(id, defaultAuto = false) {
   const defFee = (defaultAuto || curTrainerVal === '__auto__') ? defs.autoStudentFee : (isTrainer() ? (DB.settings?.[S.user.id]?.defaultStudentFee || defs.trainerStudentFee) : defs.trainerStudentFee);
   const fin = s.finance || { amount: defFee, dueDate: day(addDays(10)), method: 'PIX', paid: false };
 
-  modal(`<h2>${id ? 'Editar' : 'Novo'} Aluno (Cliente)</h2>
+  const heading = id
+    ? `Editar Aluno — ${esc(s.name)}`
+    : (isTrainer() ? `➕ Cadastrar Aluno · Prof. ${esc(S.user.name)}` : 'Novo Aluno (Cliente)');
+
+  modal(`<h2>${heading}</h2>
+  ${isTrainer() ? `<p class="mut" style="margin-bottom:8px">O aluno será cadastrado e vinculado diretamente à sua lista (<b>Prof. ${esc(S.user.name)}</b>) com ficha e controle financeiro próprios.</p>` : ''}
   <form onsubmit="saveStudent(event,'${id || ''}')">
     ${isCeo() ? `<label>Tipo de conta / Acompanhamento</label><select name="trainerId" onchange="const a=this.form.finAmount;if(a&&!'${id || ''}')a.value=this.value==='__auto__'?'${defs.autoStudentFee}':this.value==='__make_trainer__'?'${defs.trainerFee}':'${defs.trainerStudentFee}'">
       <option value="__auto__" ${curTrainerVal === '__auto__' ? 'selected' : ''}>🤖 Apenas Aluno — Sem Personal (Paga mensalidade direto ao CEO)</option>
       <option value="${S.user.id}" ${curTrainerVal === S.user.id ? 'selected' : ''}>👑 Aluno Direto do CEO (${esc(S.user.name)})</option>
       ${trainers().map(t => `<option value="${t.id}" ${curTrainerVal === t.id ? 'selected' : ''}>👨‍🏫 Aluno do Personal: ${esc(t.name)}</option>`).join('')}
-      <option value="__make_trainer__">👨‍🏫 Cadastrar como Professor · Mini CEO (Personal Trainer)</option>
+      <option value="__make_trainer__">👨‍🏫 Cadastrar como Professor (Personal Trainer)</option>
     </select>` : ''}
     <label>Nome completo</label><input name="name" required value="${esc(s.name)}" placeholder="Nome do aluno">
     <label>E-mail (login do aluno)</label><input name="email" type="email" required value="${esc(s.email)}" placeholder="aluno@email.com">
@@ -3110,22 +3226,36 @@ function studentForm(id, defaultAuto = false) {
 async function saveStudent(e, id) {
   e.preventDefault();
   const f = Object.fromEntries(new FormData(e.target));
-  const cleanEmail = (f.email || '').trim().toLowerCase();
-  const cleanPw = (f.pw || '').trim();
+  const cleanEmail = (typeof f.email === 'string' ? f.email : (f.email?.value || String(f.email || ''))).trim().toLowerCase();
+  const cleanPw = (typeof f.pw === 'string' ? f.pw : (f.pw?.value || String(f.pw || ''))).trim();
+  const nameVal = (typeof f.name === 'string' ? f.name : (f.name?.value || String(f.name || ''))).trim();
+  const phoneVal = (typeof f.phone === 'string' ? f.phone : (f.phone?.value || String(f.phone || ''))).trim();
+  const ageVal = typeof f.age === 'object' ? f.age?.value : f.age;
+  const heightVal = typeof f.height === 'object' ? f.height?.value : f.height;
+  const weightVal = typeof f.weight === 'object' ? f.weight?.value : f.weight;
+  const goalVal = typeof f.goal === 'object' ? f.goal?.value : (f.goal || '');
+  const injuriesVal = typeof f.injuries === 'object' ? f.injuries?.value : (f.injuries || '');
+  const notesVal = typeof f.notes === 'object' ? f.notes?.value : (f.notes || '');
+  const trainerIdVal = typeof f.trainerId === 'object' ? f.trainerId?.value : f.trainerId;
+  const finAmountVal = typeof f.finAmount === 'object' ? f.finAmount?.value : f.finAmount;
+  const finDueDateVal = typeof f.finDueDate === 'object' ? f.finDueDate?.value : f.finDueDate;
+  const finPaidVal = typeof f.finPaid === 'object' ? f.finPaid?.value : f.finPaid;
+  const finMethodVal = typeof f.finMethod === 'object' ? f.finMethod?.value : f.finMethod;
+
   if (DB.users.some(u => (u.email || '').trim().toLowerCase() === cleanEmail && u.id !== id)) return toast('E-mail já cadastrado.');
-  if (isCeo() && f.trainerId === '__make_trainer__') {
+  if (isCeo() && trainerIdVal === '__make_trainer__') {
     const fakeForm = e.target;
     const inp = document.createElement('input');
     inp.type = 'hidden'; inp.name = 'accType'; inp.value = 'trainer';
     fakeForm.appendChild(inp);
     return saveTrainer(e, id);
   }
-  const isAuto = isCeo() ? f.trainerId === '__auto__' : false;
-  const trainerId = isAuto ? null : (isCeo() ? (f.trainerId || S.user.id) : S.user.id);
+  const isAuto = isCeo() ? trainerIdVal === '__auto__' : false;
+  const trainerId = isAuto ? null : (isCeo() ? (trainerIdVal || S.user.id) : S.user.id);
   let u = id ? userById(id) : null;
   if (!u) {
     if (Cloud.enabled) {
-      try { const r = await Cloud.fn('createStudent', { email: cleanEmail, password: cleanPw, name: f.name.trim(), phone: f.phone || '', trainerId }); u = { id: r.id, role: 'student', active: true, trainerId, autonomous: isAuto }; }
+      try { const r = await Cloud.fn('createStudent', { email: cleanEmail, password: cleanPw, name: nameVal, phone: phoneVal, trainerId }); u = { id: r.id, role: 'student', active: true, trainerId, autonomous: isAuto }; }
       catch (err) { return toast(err.message); }
     } else {
       const salt = uid() + uid();
@@ -3146,21 +3276,22 @@ async function saveStudent(e, id) {
       }
     }
   }
-  Object.assign(u, { name: f.name.trim(), email: cleanEmail, phone: (f.phone || '').trim(), age: +f.age || null, height: +f.height || null, weight: +f.weight || null, goal: f.goal, injuries: f.injuries, notes: f.notes, updatedAt: Date.now() });
-  const isPaid = f.finPaid === 'true';
+  Object.assign(u, { name: nameVal, email: cleanEmail, phone: phoneVal, age: +ageVal || null, height: +heightVal || null, weight: +weightVal || null, goal: goalVal, injuries: injuriesVal, notes: notesVal, updatedAt: Date.now() });
+  const isPaid = finPaidVal === 'true' || finPaidVal === true;
   ensureUserFinance(u);
-  u.finance.amount = +(f.finAmount || getDefaultFeeForUser(u));
-  u.finance.dueDate = f.finDueDate || u.finance.dueDate;
-  u.finance.dueDay = Math.min(28, Math.max(1, Number(u.finance.dueDate.split('-')[2]) || 10));
-  u.finance.method = f.finMethod || 'PIX';
+  u.finance.amount = +(finAmountVal || getDefaultFeeForUser(u));
+  u.finance.dueDate = finDueDateVal || u.finance.dueDate;
+  u.finance.dueDay = Math.min(28, Math.max(1, Number(String(u.finance.dueDate).split('-')[2]) || 10));
+  u.finance.method = finMethodVal || 'PIX';
   u.finance.paid = isPaid;
   if (isPaid && !u.finance.lastPaidDate) {
     u.finance.lastPaidDate = day();
     u.finance.history = u.finance.history || [];
     if (!u.finance.history.length) u.finance.history.push({ id: uid(), date: day(), amount: u.finance.amount, method: u.finance.method, note: 'Pagamento inicial no cadastro' });
   }
-  if (f.weight && !id) DB.weights.push({ id: uid(), uid: u.id, date: day(), kg: +f.weight });
-  save(); closeModal(); render(); toast(isAuto ? 'Aluno Sem Personal salvo com sucesso ✅' : 'Aluno salvo com sucesso ✅');
+  if (weightVal && !id) DB.weights.push({ id: uid(), uid: u.id, date: day(), kg: +weightVal });
+  save(); closeModal(); render();
+  toast(isAuto ? 'Aluno Sem Personal salvo com sucesso ✅' : (isTrainer() ? `Aluno cadastrado com sucesso para o Prof. ${S.user.name} ✅` : 'Aluno salvo com sucesso ✅'));
 }
 const toggleUserActive = async id => {
   const u = userById(id); if (!u) return;

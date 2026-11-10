@@ -1,5 +1,5 @@
 /* Service worker PersonalHUB: cache offline básico + clique em notificações */
-const CACHE = 'personalhub-v10';
+const CACHE = 'personalhub-v11';
 const FILES = [
   './',
   'index.html',

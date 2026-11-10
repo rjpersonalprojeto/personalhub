@@ -1,0 +1,2446 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>PersonalHUB — Controle de Treinos, Cargas & Evolução InBody</title>
+  <meta name="theme-color" content="#0B0F17" />
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Rajdhani & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Rajdhani', 'sans-serif'],
+          },
+          colors: {
+            hub: {
+              bg: '#0B0F17',
+              card: '#141C2B',
+              cardAlt: '#0F1623',
+              border: '#1E293B',
+              neon: '#8FFF00',
+              cyan: '#00E5FF',
+              amber: '#F59E0B',
+              danger: '#F43F5E'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    * {
+      -webkit-tap-highlight-color: transparent;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #06090F;
+      color: #F8FAFC;
+      overflow-x: hidden;
+    }
+    .font-rajdhani {
+      font-family: 'Rajdhani', sans-serif;
+      letter-spacing: 0.02em;
+    }
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0B0F17;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #26354D;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #8FFF00;
+    }
+    /* Remove spinner arrows on numeric inputs */
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type=number] {
+      -moz-appearance: textfield;
+    }
+    .glass-header {
+      background: rgba(11, 15, 23, 0.92);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+    .glass-bottom {
+      background: rgba(15, 22, 35, 0.96);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+    .neon-glow {
+      box-shadow: 0 0 18px rgba(143, 255, 0, 0.22);
+    }
+    .cyan-glow {
+      box-shadow: 0 0 18px rgba(0, 229, 255, 0.2);
+    }
+    .card-done {
+      border-color: rgba(143, 255, 0, 0.65) !important;
+      background: linear-gradient(145deg, rgba(143, 255, 0, 0.08) 0%, rgba(20, 28, 43, 0.98) 100%) !important;
+    }
+    @keyframes popIn {
+      0% { transform: scale(0.96); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .animate-pop {
+      animation: popIn 0.2s ease-out forwards;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex justify-center bg-[#05070C] text-slate-100 selection:bg-[#8FFF00] selection:text-slate-950">
+
+  <!-- CONTAINER MOBILE CENTRALIZADO (MAX-W-MD COM SUPORTE EXPANSÍVEL EM TELAS MAIORES) -->
+  <div class="w-full max-w-lg min-h-screen bg-[#0B0F17] sm:border-x sm:border-slate-800/80 shadow-2xl flex flex-col relative pb-24">
+
+    <!-- ==================== HEADER FIXO PERSONALHUB ==================== -->
+    <header class="sticky top-0 z-30 glass-header border-b border-slate-800/90 px-3.5 pt-3 pb-2.5">
+      <div class="flex items-center justify-between gap-2">
+        <!-- Brand + Perfil Ativo -->
+        <div class="flex items-center gap-2.5 min-w-0">
+          <a href="index.html" class="w-10 h-10 rounded-xl bg-[#141C2B] border border-[#8FFF00]/50 flex items-center justify-center text-[#8FFF00] font-rajdhani font-bold text-lg neon-glow shrink-0 hover:scale-105 transition" title="Voltar ao PersonalHUB Principal">
+            PH
+          </a>
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5">
+              <span class="font-rajdhani font-bold text-xs tracking-wider uppercase px-1.5 py-0.5 rounded bg-[#8FFF00]/15 text-[#8FFF00] border border-[#8FFF00]/30">
+                PersonalHUB
+              </span>
+              <h1 id="headerStudentName" class="font-bold text-sm text-white truncate">Gabriela Lima</h1>
+              <button onclick="openProfileModal()" class="text-slate-400 hover:text-[#8FFF00] p-1 rounded-lg transition" title="Editar dados da aluna">
+                <i data-lucide="user-pen" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+            <p id="headerStudentMeta" class="text-[11px] text-slate-400 truncate mt-0.5">
+              ID: gabriela-laroc • 166cm • 42 anos • <span class="text-[#00E5FF] font-semibold">InBody 81/100</span>
+            </p>
+          </div>
+        </div>
+
+        <!-- Ações Rápidas: Voltar ao App, WhatsApp & Reset Demo -->
+        <div class="flex items-center gap-1.5 shrink-0">
+          <a href="index.html" class="px-2.5 py-1.5 rounded-xl bg-[#141C2B] hover:bg-slate-800 border border-slate-700 text-xs font-semibold text-slate-300 flex items-center gap-1 transition" title="Voltar para a tela inicial">
+            <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+            <span class="hidden xs:inline">App</span>
+          </a>
+          <button onclick="openWhatsAppModal('full')" class="px-2.5 py-1.5 rounded-xl bg-[#8FFF00]/15 hover:bg-[#8FFF00]/25 border border-[#8FFF00]/40 text-[#8FFF00] text-xs font-bold flex items-center gap-1 transition" title="Exportar Relatório no WhatsApp">
+            <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
+            <span class="hidden xs:inline">WhatsApp</span>
+          </button>
+          <button onclick="resetAllDemoData()" class="p-2 rounded-xl bg-[#141C2B] hover:bg-slate-800 border border-slate-700/80 text-slate-400 hover:text-rose-400 transition" title="Restaurar dados originais do exame e treino">
+            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ==================== CONTEÚDO PRINCIPAL DAS 4 ABAS ==================== -->
+    <main class="flex-1 px-3.5 pt-3 pb-6 space-y-4">
+
+      <!-- =========================================================================
+           ABA 1: TREINOS (ABCD) — REGISTRO DIÁRIO DE CARGAS + GRÁFICO DE FORÇA
+           ========================================================================= -->
+      <section id="tab-treinos" class="space-y-3.5">
+        
+        <!-- Barra de Controle de Mesociclo e Microciclos (Semanas 1 a 4) -->
+        <div class="bg-[#141C2B] border border-slate-800 rounded-2xl p-3 space-y-2.5">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-1.5">
+              <i data-lucide="layers" class="w-4 h-4 text-[#8FFF00]"></i>
+              <span class="font-rajdhani font-bold text-sm uppercase tracking-wider text-white">Controle de Cargas do Mesociclo</span>
+            </div>
+            <select id="mesocycleSelect" onchange="changeMesocycle(this.value)" class="bg-[#0B0F17] border border-slate-700 text-xs font-semibold text-[#8FFF00] rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-[#8FFF00]">
+              <option value="Mesociclo 01 (Mensal)">Mesociclo 01 (Mensal)</option>
+              <option value="Mesociclo 02 (Força)">Mesociclo 02 (Força)</option>
+              <option value="Mesociclo 03 (Pico)">Mesociclo 03 (Pico)</option>
+            </select>
+          </div>
+
+          <!-- Pílulas de Microciclo (Semanas 1 a 4) -->
+          <div class="grid grid-cols-4 gap-1.5 bg-[#0B0F17] p-1 rounded-xl border border-slate-800/90">
+            <button onclick="selectWeek(1)" id="weekPill-1" class="py-1.5 px-1 rounded-lg text-center transition-all">
+              <span class="block text-[11px] font-bold leading-tight">Sem 1</span>
+              <span class="block text-[9px] opacity-75">Base</span>
+            </button>
+            <button onclick="selectWeek(2)" id="weekPill-2" class="py-1.5 px-1 rounded-lg text-center transition-all">
+              <span class="block text-[11px] font-bold leading-tight">Sem 2</span>
+              <span class="block text-[9px] opacity-75">Progr.</span>
+            </button>
+            <button onclick="selectWeek(3)" id="weekPill-3" class="py-1.5 px-1 rounded-lg text-center transition-all">
+              <span class="block text-[11px] font-bold leading-tight">Sem 3</span>
+              <span class="block text-[9px] opacity-75">Pico</span>
+            </button>
+            <button onclick="selectWeek(4)" id="weekPill-4" class="py-1.5 px-1 rounded-lg text-center transition-all">
+              <span class="block text-[11px] font-bold leading-tight">Sem 4</span>
+              <span class="block text-[9px] opacity-75">Consol.</span>
+            </button>
+          </div>
+
+          <!-- Data do Treino + Barra de Progresso do Dia -->
+          <div class="flex items-center justify-between gap-2 pt-0.5 text-xs">
+            <div class="flex items-center gap-1.5 bg-[#0B0F17] border border-slate-800 px-2.5 py-1 rounded-lg">
+              <i data-lucide="calendar" class="w-3.5 h-3.5 text-[#00E5FF]"></i>
+              <input type="date" id="workoutDateInput" onchange="updateWorkoutDate(this.value)" class="bg-transparent text-white font-semibold text-[11px] focus:outline-none" />
+            </div>
+            <div class="flex items-center gap-2 flex-1 justify-end">
+              <div class="w-24 h-2 bg-[#0B0F17] rounded-full overflow-hidden border border-slate-800">
+                <div id="workoutProgressBar" class="h-full bg-[#8FFF00] transition-all duration-300" style="width: 0%"></div>
+              </div>
+              <span id="workoutProgressText" class="text-[11px] font-bold text-[#8FFF00]">0/5</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Seletor de Divisão de Treino: A, B, C, D -->
+        <div class="grid grid-cols-4 gap-2">
+          <button onclick="selectWorkoutSplit('A')" id="splitBtn-A" class="p-2.5 rounded-xl border text-left transition-all">
+            <div class="flex items-center justify-between">
+              <span class="font-rajdhani font-bold text-sm">TREINO A</span>
+              <span class="w-2 h-2 rounded-full bg-[#8FFF00]"></span>
+            </div>
+            <span class="block text-[10px] opacity-80 truncate">Quadríceps</span>
+          </button>
+          <button onclick="selectWorkoutSplit('B')" id="splitBtn-B" class="p-2.5 rounded-xl border text-left transition-all">
+            <div class="flex items-center justify-between">
+              <span class="font-rajdhani font-bold text-sm">TREINO B</span>
+              <span class="w-2 h-2 rounded-full bg-[#00E5FF]"></span>
+            </div>
+            <span class="block text-[10px] opacity-80 truncate">Superiores</span>
+          </button>
+          <button onclick="selectWorkoutSplit('C')" id="splitBtn-C" class="p-2.5 rounded-xl border text-left transition-all">
+            <div class="flex items-center justify-between">
+              <span class="font-rajdhani font-bold text-sm">TREINO C</span>
+              <span class="w-2 h-2 rounded-full bg-purple-400"></span>
+            </div>
+            <span class="block text-[10px] opacity-80 truncate">Post./Glúteo</span>
+          </button>
+          <button onclick="selectWorkoutSplit('D')" id="splitBtn-D" class="p-2.5 rounded-xl border text-left transition-all">
+            <div class="flex items-center justify-between">
+              <span class="font-rajdhani font-bold text-sm">TREINO D</span>
+              <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+            </div>
+            <span class="block text-[10px] opacity-80 truncate">Ombro/Braço</span>
+          </button>
+        </div>
+
+        <!-- GRÁFICO EM TEMPO REAL DE PROGRESSÃO DE CARGA DO TREINO SELECIONADO -->
+        <div class="bg-[#141C2B] border border-slate-800 rounded-2xl p-3.5">
+          <div class="flex items-center justify-between mb-2">
+            <div>
+              <span class="text-[10px] font-bold uppercase tracking-wider text-[#8FFF00] block">Gráfico Automático em Tempo Real</span>
+              <h2 id="workoutChartTitle" class="font-rajdhani font-bold text-base text-white">Evolução de Cargas — Treino A (Sem 1 a Sem 4)</h2>
+            </div>
+            <span class="text-[10px] px-2 py-0.5 rounded-md bg-[#0B0F17] border border-slate-800 text-slate-400">
+              Atualiza ao digitar
+            </span>
+          </div>
+          <!-- Container SVG do Gráfico de Evolução de Cargas -->
+          <div id="workoutLoadChartContainer" class="w-full overflow-x-auto"></div>
+        </div>
+
+        <!-- Lista de Cards de Exercícios (com Input "Carga Hoje kg" e "Reps Feitas") -->
+        <div id="exerciseListContainer" class="space-y-3"></div>
+
+        <!-- Botão Adicionar Exercício ao Treino -->
+        <button onclick="openAddExerciseModal()" class="w-full py-3 rounded-2xl border border-dashed border-slate-700 hover:border-[#8FFF00] bg-[#141C2B]/50 hover:bg-[#141C2B] text-slate-300 hover:text-[#8FFF00] font-semibold text-xs flex items-center justify-center gap-2 transition">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i>
+          <span>Adicionar Exercício ao <strong id="addExSplitLabel">Treino A</strong></span>
+        </button>
+
+        <!-- Observação da Aluna sobre a Sessão -->
+        <div class="bg-[#141C2B] border border-slate-800 rounded-2xl p-3">
+          <label class="block text-[11px] font-bold text-slate-300 mb-1.5">
+            Feedback da Aluna no Pós-Treino (enviado junto no WhatsApp):
+          </label>
+          <input
+            type="text"
+            id="workoutSessionNoteInput"
+            oninput="saveWorkoutSessionNote(this.value)"
+            placeholder="Ex: Treino excelente hoje! Subi carga no Agachamento e Leg Press..."
+            class="w-full bg-[#0B0F17] border border-slate-800 focus:border-[#8FFF00] rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none"
+          />
+        </div>
+
+        <!-- Botão Principal: Enviar Cargas do Dia no WhatsApp -->
+        <button onclick="openWhatsAppModal('workout')" class="w-full py-3.5 px-4 rounded-2xl bg-[#8FFF00] hover:bg-[#9eff26] active:scale-[0.99] text-slate-950 font-rajdhani font-bold text-base tracking-wide neon-glow flex items-center justify-center gap-2 transition">
+          <i data-lucide="send" class="w-4 h-4"></i>
+          <span>ENVIAR CARGAS DO TREINO NO WHATSAPP</span>
+        </button>
+
+      </section>
+
+      <!-- =========================================================================
+           ABA 2: INBODY & GRÁFICOS — TABELA EDITÁVEL -> GRÁFICO EM TEMPO REAL
+           ========================================================================= -->
+      <section id="tab-inbody" class="hidden space-y-4">
+
+        <!-- Cabeçalho Oficial Estilo Laudo InBody 770 -->
+        <div class="bg-gradient-to-br from-[#141C2B] via-[#111827] to-[#0B0F17] border border-slate-800 rounded-2xl p-3.5">
+          <div class="flex items-start justify-between gap-2 border-b border-slate-800/90 pb-3 mb-3">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-rajdhani font-bold text-lg px-2 py-0.5 rounded bg-rose-600/20 text-rose-400 border border-rose-500/30">
+                  InBody 770
+                </span>
+                <span class="text-xs font-bold text-white">CLÍNICA EXPERIENCE</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1">
+                Aluna: <strong class="text-white">Gabriela Lima (gabriela-laroc)</strong> • 166 cm • 42 anos • Feminino
+              </p>
+            </div>
+            <!-- Pontuação InBody Editável -->
+            <div class="bg-[#0B0F17] border border-[#8FFF00]/50 rounded-xl px-3 py-1.5 text-right shrink-0">
+              <span class="block text-[9px] uppercase tracking-wider text-slate-400 font-bold">Pontuação InBody</span>
+              <div class="flex items-baseline justify-end gap-1">
+                <input
+                  type="number"
+                  id="inbodyScoreInput"
+                  value="81"
+                  oninput="updateInbodyDetail('score', this.value)"
+                  class="w-10 bg-transparent text-right font-rajdhani font-bold text-xl text-[#8FFF00] focus:outline-none"
+                />
+                <span class="text-[11px] text-slate-400 font-semibold">/100</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sub-navegação interna da aba InBody -->
+          <div class="grid grid-cols-3 gap-1.5 bg-[#0B0F17] p-1 rounded-xl border border-slate-800">
+            <button onclick="switchInbodySubtab('historico')" id="inbodySub-historico" class="py-1.5 px-2 rounded-lg text-[11px] font-bold transition">
+              1. Tabela & Gráfico
+            </button>
+            <button onclick="switchInbodySubtab('composicao')" id="inbodySub-composicao" class="py-1.5 px-2 rounded-lg text-[11px] font-bold transition">
+              2. Músculo-Gordura
+            </button>
+            <button onclick="switchInbodySubtab('segmentar')" id="inbodySub-segmentar" class="py-1.5 px-2 rounded-lg text-[11px] font-bold transition">
+              3. Segmentar & Z(Ω)
+            </button>
+          </div>
+        </div>
+
+        <!-- SUB-VISÃO 2.1: TABELA PREENCHÍVEL + 4 GRÁFICOS EMPILHADOS DO HISTÓRICO INBODY -->
+        <div id="inbodyView-historico" class="space-y-4">
+
+          <!-- BLOCO DA TABELA EDITÁVEL -->
+          <div class="bg-[#141C2B] border border-slate-800 rounded-2xl p-3.5">
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <div>
+                <span class="text-[10px] font-bold uppercase tracking-wider text-[#00E5FF] block">Tabela Interativa Preenchível</span>
+                <h3 class="font-rajdhani font-bold text-base text-white">Histórico da Composição Corporal (Edite abaixo)</h3>
+              </div>
+              <button onclick="addInbodyHistoryRow()" class="px-2.5 py-1.5 rounded-xl bg-[#8FFF00] hover:bg-[#9eff26] text-slate-950 font-bold text-xs flex items-center gap-1 transition shrink-0">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                <span>Nova Data</span>
+              </button>
+            </div>
+            <p class="text-[11px] text-slate-400 mb-2.5">
+              Altere qualquer valor de <strong class="text-white">Peso, MME, PGC (%) ou Taxa de AEC</strong> na tabela e veja o gráfico InBody abaixo ser redesenhado na mesma hora:
+            </p>
+
+            <div class="overflow-x-auto rounded-xl border border-slate-800">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="bg-[#0B0F17] text-[10px] font-bold uppercase text-slate-400 border-b border-slate-800">
+                    <th class="py-2 px-2">Data</th>
+                    <th class="py-2 px-1.5 text-center text-white">Peso (kg)</th>
+                    <th class="py-2 px-1.5 text-center text-[#00E5FF]">MME (kg)</th>
+                    <th class="py-2 px-1.5 text-center text-amber-400">PGC (%)</th>
+                    <th class="py-2 px-1.5 text-center text-rose-400">Taxa AEC</th>
+                    <th class="py-2 px-1 text-center"></th>
+                  </tr>
+                </thead>
+                <tbody id="inbodyHistoryTableBody" class="divide-y divide-slate-800/70 text-xs bg-[#0F1623]"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- BLOCO DOS 4 GRÁFICOS EMPILHADOS IDÊNTICOS AO LAUDO INBODY -->
+          <div class="bg-[#141C2B] border border-slate-800 rounded-2xl p-3.5">
+            <div class="flex items-center justify-between mb-2">
+              <div>
+                <span class="text-[10px] font-bold uppercase tracking-wider text-[#8FFF00] block">Gráfico Automático Sincronizado</span>
+                <h3 class="font-rajdhani font-bold text-base text-white">Curvas de Evolução — Histórico da Composição Corporal</h3>
+              </div>
+              <span id="inbodyCountBadge" class="text-[10px] font-bold px-2 py-0.5 rounded bg-[#0B0F17] text-[#00E5FF] border border-slate-800">
+                8 Avaliações
+              </span>
+            </div>
+
+            <!-- Container onde os 4 gráficos SVG empilhados (Peso, MME, PGC, AEC) são desenhados -->
+            <div id="inbodyStackedChartsContainer" class="space-y-2.5 overflow-x-auto pb-1"></div>
+          </div>
+
+        </div>
+
+        <!-- SUB-VISÃO 2.2: ANÁLISE MÚSCULO-GORDURA, OBESIDADE E COMPOSIÇÃO (08.10.2026) -->
+        <div id="inbodyView-composicao" class="hidden space-y-4">
+          
+          <!-- Barras Horizontais: Análise Músculo-Gordura & Obesidade -->
+          <div class="bg-[#141C2B] border border-slate-800 rounded-2xl p-3.5 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="text-[10px] font-bold uppercase tracking-wider text-[#8FFF00] block">Barras Dinâmicas c/ Faixas de Referência</span>
+                <h3 class="font-rajdhani font-bold text-base text-white">Análise Músculo-Gordura & Obesidade</h3>
+              </div>
+              <span class="text-[10px] text-slate-400">Edite os números</span>
+            </div>
+
+            <!-- Container renderizado via JS com barras Abaixo / Normal / Acima -->
+            <div id="muscleFatBarsContainer" class="space-y-3"></div>
+          </div>
+
+          <!-- Grid Editável: Composição Corporal + Dados Adicionais + Gordura Visceral -->
+          <div class="bg-[#141C2B] border border-slate-800 rounded-2xl p-3.5 space-y-3">
+            <h3 class="font-rajdhani font-bold text-base text-white border-b border-slate-800 pb-2">
+              Análise da Composição Corporal & Dados Adicionais (InBody 770)
+            </h3>
+            <div id="inbodyDetailedGridContainer" class="grid grid-cols-2 gap-2.5"></div>
+          </div>
+
+        </div>
+
+        <!-- SUB-VISÃO 2.3: ANÁLISE SEGMENTAR (MASSA MAGRA & GORDURA) + IMPEDÂNCIA Z(Ω) -->
+        <div id="inbodyView-segmentar" class="hidden space-y-4">
+          
+          <!-- Tabela Editável + Gráfico de Barras Segmentar -->
+          <div class="bg-[#141C2B] border border-slate-800 rounded-2xl p-3.5 space-y-3">
+            <div>
+              <span class="text-[10px] font-bold uppercase tracking-wider text-[#00E5FF] block">Equilíbrio Muscular e de Gordura</span>
+              <h3 class="font-rajdhani font-bold text-base text-white">Análise Segmentar (Braços, Tronco e Pernas)</h3>
+              <p class="text-[11px] text-slate-400">Edite os valores em <strong class="text-white">kg</strong> ou <strong class="text-white">%</strong> abaixo para atualizar o gráfico comparativo:</p>
+            </div>
+
+            <div id="segmentalAnalysisContainer" class="space-y-3"></div>
+          </div>
+
+          <!-- Impedância Bioelétrica Z(Ω) por Segmento e Frequência -->
+          <div class="bg-[#141C2B] border border-slate-800 rounded-2xl p-3.5 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <h3 class="font-rajdhani font-bold text-base text-white">Impedância Bioelétrica Z(Ω) — Multi-frequência</h3>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-[#0B0F17] text-slate-400 border border-slate-800">1 kHz a 1000 kHz</span>
+            </div>
+            <div class="overflow-x-auto rounded-xl border border-slate-800">
+              <table class="w-full text-[11px] text-center border-collapse bg-[#0F1623]">
+                <thead>
+                  <tr class="bg-[#0B0F17] text-slate-400 font-bold border-b border-slate-800">
+                    <th class="py-1.5 px-2 text-left">Freq.</th>
+                    <th class="py-1.5 px-1.5">BD</th>
+                    <th class="py-1.5 px-1.5">BE</th>
+                    <th class="py-1.5 px-1.5">TR</th>
+                    <th class="py-1.5 px-1.5">PD</th>
+                    <th class="py-1.5 px-1.5">PE</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/70 text-slate-200 font-mono text-[10px]">
+                  <tr><td class="py-1.5 px-2 text-left font-sans font-semibold text-slate-400">1 kHz</td><td>458,0</td><td>459,1</td><td>27,9</td><td>367,6</td><td>355,0</td></tr>
+                  <tr><td class="py-1.5 px-2 text-left font-sans font-semibold text-slate-400">5 kHz</td><td>445,4</td><td>447,2</td><td>26,7</td><td>358,8</td><td>346,9</td></tr>
+                  <tr><td class="py-1.5 px-2 text-left font-sans font-semibold text-[#8FFF00]">20 kHz</td><td>393,2</td><td>376,3</td><td>23,2</td><td>360,8</td><td>348,4</td></tr>
+                  <tr><td class="py-1.5 px-2 text-left font-sans font-semibold text-slate-400">50 kHz</td><td>382,9</td><td>385,9</td><td>22,4</td><td>310,5</td><td>301,9</td></tr>
+                  <tr><td class="py-1.5 px-2 text-left font-sans font-semibold text-[#00E5FF]">100 kHz</td><td>342,4</td><td>318,7</td><td>17,6</td><td>308,6</td><td>298,9</td></tr>
+                  <tr><td class="py-1.5 px-2 text-left font-sans font-semibold text-slate-400">250 kHz</td><td>342,4</td><td>345,3</td><td>19,0</td><td>275,8</td><td>268,5</td></tr>
+                  <tr><td class="py-1.5 px-2 text-left font-sans font-semibold text-slate-400">500 kHz</td><td>331,2</td><td>334,2</td><td>18,7</td><td>268,1</td><td>261,1</td></tr>
+                  <tr><td class="py-1.5 px-2 text-left font-sans font-semibold text-slate-400">1000 kHz</td><td>322,9</td><td>326,4</td><td>16,5</td><td>262,4</td><td>255,7</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+      </section>
+
+      <!-- =========================================================================
+           ABA 3: DOBRAS & MEDIDAS — ADIPÔMETRO 3X + PERIMETRIA + GRÁFICO
+           ========================================================================= -->
+      <section id="tab-dobras" class="hidden space-y-4">
+
+        <!-- Dashboard Superior de Composição por Dobras Cutâneas (Calculado em Tempo Real) -->
+        <div class="bg-[#141C2B] border border-slate-800 rounded-2xl p-3.5 space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="text-[10px] font-bold uppercase tracking-wider text-[#8FFF00] block">Cálculo Automático Jackson & Pollock + Siri</span>
+              <h2 class="font-rajdhani font-bold text-base text-white">Avaliação por Dobras Cutâneas & Perimetria</h2>
+            </div>
+            <button onclick="saveCurrentSkinfoldToHistory()" class="px-2.5 py-1.5 rounded-xl bg-[#8FFF00] hover:bg-[#9eff26] text-slate-950 font-bold text-xs flex items-center gap-1 transition">
+              <i data-lucide="bookmark-check" class="w-3.5 h-3.5"></i>
+              <span>Registrar no Gráfico</span>
+            </button>
+          </div>
+
+          <!-- 4 Cards de Resultado Automático -->
+          <div class="grid grid-cols-4 gap-2">
+            <div class="bg-[#0B0F17] border border-slate-800 rounded-xl p-2 text-center">
+              <span class="block text-[9px] uppercase text-slate-400 font-bold">Σ Dobras</span>
+              <span id="calcSumMm" class="font-rajdhani font-bold text-lg text-[#00E5FF]">0 mm</span>
+              <span id="calcDeltaMm" class="block text-[9px] text-emerald-400 font-semibold">-8 mm</span>
+            </div>
+            <div class="bg-[#0B0F17] border border-slate-800 rounded-xl p-2 text-center">
+              <span class="block text-[9px] uppercase text-slate-400 font-bold">% Gordura</span>
+              <span id="calcPollockBf" class="font-rajdhani font-bold text-lg text-[#8FFF00]">0.0%</span>
+              <span class="block text-[9px] text-slate-400">Pollock</span>
+            </div>
+            <div class="bg-[#0B0F17] border border-slate-800 rounded-xl p-2 text-center">
+              <span class="block text-[9px] uppercase text-slate-400 font-bold">M. Magra</span>
+              <span id="calcLeanKg" class="font-rajdhani font-bold text-lg text-white">0.0 kg</span>
+              <span class="block text-[9px] text-slate-400">Livre Gord.</span>
+            </div>
+            <div class="bg-[#0B0F17] border border-slate-800 rounded-xl p-2 text-center">
+              <span class="block text-[9px] uppercase text-slate-400 font-bold">RCQ</span>
+              <span id="calcRcqVal" class="font-rajdhani font-bold text-lg text-amber-400">0.88</span>
+              <span class="block text-[9px] text-slate-400">Cint/Quad</span>
+            </div>
+          </div>
+
+          <!-- Seletor de Protocolo de Dobras -->
+          <div>
+            <span class="block text-[10px] font-bold uppercase text-slate-400 mb-1.5">Protocolo de Avaliação:</span>
+            <div class="grid grid-cols-3 gap-1.5 bg-[#0B0F17] p-1 rounded-xl border border-slate-800">
+              <button onclick="setSkinfoldProtocol('P3')" id="protoBtn-P3" class="py-1.5 px-2 rounded-lg text-[11px] font-bold transition">
+                Pollock 3 Dobras
+              </button>
+              <button onclick="setSkinfoldProtocol('P7')" id="protoBtn-P7" class="py-1.5 px-2 rounded-lg text-[11px] font-bold transition">
+                Pollock 7 Dobras
+              </button>
+              <button onclick="setSkinfoldProtocol('ALL')" id="protoBtn-ALL" class="py-1.5 px-2 rounded-lg text-[11px] font-bold transition">
+                Completo (9)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Lista de Dobras Cutâneas com Modo Adipômetro "3x (Média)" -->
+        <div class="bg-[#141C2B] border border-slate-800 rounded-2xl p-3.5 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <h3 class="font-rajdhani font-bold text-base text-white">
+              Registro de Dobras Cutâneas (mm)
+            </h3>
+            <span class="text-[10px] text-[#00E5FF] font-semibold">
+              Toque em "3x Média" p/ calcular 3 pinçadas
+            </span>
+          </div>
+          <div id="skinfoldInputsContainer" class="space-y-2"></div>
+        </div>
+
+        <!-- Gráfico Automático de Evolução de Dobras (Σ mm) & Circunferência -->
+        <div class="bg-[#141C2B] border border-slate-800 rounded-2xl p-3.5 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="text-[10px] font-bold uppercase tracking-wider text-[#8FFF00] block">Gráfico Antropométrico</span>
+              <h3 class="font-rajdhani font-bold text-base text-white">Queda no Somatório de Dobras (Σ mm) & Cintura</h3>
+            </div>
+          </div>
+          <div id="skinfoldChartContainer" class="w-full overflow-x-auto"></div>
+        </div>
+
+        <!-- Tabela Editável de Perimetria / Medidas Corporais (cm) com Detector de Assimetria -->
+        <div class="bg-[#141C2B] border border-slate-800 rounded-2xl p-3.5 space-y-3">
+          <div>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-[#00E5FF] block">Circunferências Corporais (cm)</span>
+            <h3 class="font-rajdhani font-bold text-base text-white">Perimetria & Comparativo Bilateral (Dir. vs Esq.)</h3>
+            <p class="text-[11px] text-slate-400">O sistema avisa automaticamente caso haja diferença &ge; 1,5 cm entre o lado Direito e Esquerdo.</p>
+          </div>
+
+          <div id="MeasurementsContainer" class="space-y-2.5"></div>
+        </div>
+
+      </section>
+
+      <!-- =========================================================================
+           ABA 4: CRONOGRAMA — MICROCICLO (SEMANAL) E MESOCICLO (MENSAL)
+           ========================================================================= -->
+      <section id="tab-cronograma" class="hidden space-y-4">
+
+        <!-- Resumo do Mesociclo -->
+        <div class="bg-[#141C2B] border border-slate-800 rounded-2xl p-3.5 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="text-[10px] font-bold uppercase tracking-wider text-[#8FFF00] block">Planejamento Trimestral / Mensal</span>
+              <h2 class="font-rajdhani font-bold text-base text-white">Cronograma Semanal de Microciclos (Semanas 1 a 4)</h2>
+            </div>
+            <span id="scheduleAdherenceBadge" class="text-xs font-extrabold px-2.5 py-1 rounded-xl bg-[#8FFF00]/15 text-[#8FFF00] border border-[#8FFF00]/30">
+              16 Sessões
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-400">
+            Toque nos dias de <strong class="text-white">Segunda a Domingo</strong> para alternar o treino previsto (<span class="text-[#8FFF00]">A, B, C, D, Cardio ou Descanso</span>) e anote o peso parcial de cada semana.
+          </p>
+        </div>
+
+        <!-- Cards das 4 Semanas do Mesociclo -->
+        <div id="scheduleWeeksList" class="space-y-3"></div>
+
+        <!-- Botão Exportar Relatório Geral Unificado -->
+        <button onclick="openWhatsAppModal('full')" class="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-[#8FFF00] to-[#00E5FF] text-slate-950 font-rajdhani font-bold text-base tracking-wide shadow-lg flex items-center justify-center gap-2 transition">
+          <i data-lucide="file-check-2" class="w-4 h-4"></i>
+          <span>GERAR RELATÓRIO COMPLETO (CARGAS + INBODY + DOBRAS)</span>
+        </button>
+
+      </section>
+
+    </main>
+
+    <!-- ==================== BARRA DE NAVEGAÇÃO INFERIOR (4 ABAS) ==================== -->
+    <nav class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-lg glass-bottom border-t border-slate-800/90 px-2.5 py-1.5 z-40">
+      <div class="grid grid-cols-4 gap-1.5">
+        <button onclick="switchMainTab('treinos')" id="navTab-treinos" class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all">
+          <i data-lucide="dumbbell" class="w-4 h-4 mb-0.5"></i>
+          <span class="text-[10px] font-bold">Treinos & Carga</span>
+        </button>
+
+        <button onclick="switchMainTab('inbody')" id="navTab-inbody" class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all">
+          <i data-lucide="activity" class="w-4 h-4 mb-0.5"></i>
+          <span class="text-[10px] font-bold">InBody & Gráficos</span>
+        </button>
+
+        <button onclick="switchMainTab('dobras')" id="navTab-dobras" class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all">
+          <i data-lucide="ruler" class="w-4 h-4 mb-0.5"></i>
+          <span class="text-[10px] font-bold">Dobras & Medidas</span>
+        </button>
+
+        <button onclick="switchMainTab('cronograma')" id="navTab-cronograma" class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all">
+          <i data-lucide="calendar-check-2" class="w-4 h-4 mb-0.5"></i>
+          <span class="text-[10px] font-bold">Cronograma</span>
+        </button>
+      </div>
+    </nav>
+
+  </div>
+
+  <!-- ==================== MODAL 1: RELATÓRIO WHATSAPP ==================== -->
+  <div id="whatsAppModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="w-full max-w-md bg-[#141C2B] border-t sm:border border-slate-700 rounded-t-3xl sm:rounded-3xl p-5 space-y-3.5 max-h-[90vh] flex flex-col">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-9 h-9 rounded-xl bg-[#8FFF00]/20 border border-[#8FFF00]/40 flex items-center justify-center text-[#8FFF00]">
+            <i data-lucide="message-square-share" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-rajdhani font-bold text-base text-white">Exportar Relatório para WhatsApp</h3>
+            <p class="text-[11px] text-slate-400">PersonalHUB — Check-in de Cargas & Evolução</p>
+          </div>
+        </div>
+        <button onclick="closeWhatsAppModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div>
+        <label class="block text-[11px] font-semibold text-slate-400 mb-1">WhatsApp de Destino (DDD + Número - opcional):</label>
+        <input
+          type="tel"
+          id="waPhoneInput"
+          oninput="saveWaPhone(this.value)"
+          placeholder="Ex: 5581999999999"
+          class="w-full bg-[#0B0F17] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8FFF00]"
+        />
+      </div>
+
+      <div class="flex-1 overflow-y-auto">
+        <label class="block text-[11px] font-semibold text-slate-400 mb-1">Texto Formatado:</label>
+        <textarea
+          id="waTextPreview"
+          rows="10"
+          class="w-full bg-[#0B0F17] border border-slate-800 rounded-xl p-3 text-xs text-slate-200 font-mono leading-relaxed focus:outline-none focus:border-[#8FFF00]"
+        ></textarea>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2.5 pt-1">
+        <button onclick="copyWaText()" class="py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition">
+          <i data-lucide="copy" class="w-4 h-4"></i>
+          <span>Copiar Texto</span>
+        </button>
+        <button onclick="openWaLink()" class="py-3 rounded-xl bg-[#8FFF00] hover:bg-[#9eff26] text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 transition">
+          <i data-lucide="external-link" class="w-4 h-4"></i>
+          <span>Abrir WhatsApp</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 2: ADICIONAR EXERCÍCIO ==================== -->
+  <div id="addExerciseModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="w-full max-w-md bg-[#141C2B] border-t sm:border border-slate-700 rounded-t-3xl sm:rounded-3xl p-5 space-y-3.5">
+      <div class="flex items-center justify-between">
+        <h3 class="font-rajdhani font-bold text-base text-white">Novo Exercício na Ficha</h3>
+        <button onclick="closeAddExerciseModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Nome do Exercício *</label>
+          <input type="text" id="newExNameInput" placeholder="Ex: Agachamento Sumô c/ Halter" class="w-full bg-[#0B0F17] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8FFF00]" />
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Séries x Reps Alvo</label>
+            <input type="text" id="newExTargetInput" value="4x 8 a 10 reps" class="w-full bg-[#0B0F17] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8FFF00]" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Margem RIR</label>
+            <input type="text" id="newExRirInput" value="RIR 1-2" class="w-full bg-[#0B0F17] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8FFF00]" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Carga Hoje (kg)</label>
+            <input type="number" step="0.5" id="newExLoadInput" placeholder="Ex: 30" class="w-full bg-[#0B0F17] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8FFF00]" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Reps Feitas</label>
+            <input type="number" id="newExRepsInput" placeholder="Ex: 10" class="w-full bg-[#0B0F17] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8FFF00]" />
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-2 pt-2">
+        <button onclick="closeAddExerciseModal()" class="py-2.5 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs">Cancelar</button>
+        <button onclick="confirmAddExercise()" class="py-2.5 rounded-xl bg-[#8FFF00] text-slate-950 font-bold text-xs">Adicionar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 3: EDITAR PERFIL DA ALUNA ==================== -->
+  <div id="profileModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="w-full max-w-md bg-[#141C2B] border-t sm:border border-slate-700 rounded-t-3xl sm:rounded-3xl p-5 space-y-3.5">
+      <div class="flex items-center justify-between">
+        <h3 class="font-rajdhani font-bold text-base text-white">Editar Perfil da Aluna</h3>
+        <button onclick="closeProfileModal()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div class="space-y-2.5">
+        <div>
+          <label class="block text-xs text-slate-300 font-semibold mb-1">Nome da Aluna</label>
+          <input type="text" id="profNameInput" class="w-full bg-[#0B0F17] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8FFF00]" />
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          <div>
+            <label class="block text-xs text-slate-300 font-semibold mb-1">Altura (cm)</label>
+            <input type="number" id="profHeightInput" class="w-full bg-[#0B0F17] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8FFF00]" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-300 font-semibold mb-1">Idade</label>
+            <input type="number" id="profAgeInput" class="w-full bg-[#0B0F17] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8FFF00]" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-300 font-semibold mb-1">Sexo</label>
+            <select id="profSexInput" class="w-full bg-[#0B0F17] border border-slate-800 rounded-xl px-2 py-2 text-xs text-white focus:outline-none focus:border-[#8FFF00]">
+              <option value="F">Feminino</option>
+              <option value="M">Masculino</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-2 pt-2">
+        <button onclick="closeProfileModal()" class="py-2.5 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs">Cancelar</button>
+        <button onclick="saveProfileModal()" class="py-2.5 rounded-xl bg-[#8FFF00] text-slate-950 font-bold text-xs">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TOAST DE NOTIFICAÇÃO ==================== -->
+  <div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 hidden items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#141C2B] border border-[#8FFF00] text-white text-xs font-bold shadow-2xl">
+    <span class="w-2 h-2 rounded-full bg-[#8FFF00]"></span>
+    <span id="toastText">Atualizado com sucesso!</span>
+  </div>
+
+  <!-- ==================== JAVASCRIPT: ESTADO, GRÁFICOS E INTERATIVIDADE ==================== -->
+  <script>
+    const STORAGE_KEY = 'personalhub_unified_inbody_v2';
+
+    // Suporte para carregar dados de aluno específico passado por query param (?studentId=... ou ?name=...)
+    const urlParams = new URLSearchParams(window.location.search);
+    const queryStudentId = urlParams.get('studentId');
+    const queryStudentName = urlParams.get('studentName');
+
+    function getInitialState() {
+      const stateObj = {
+        activeTab: 'treinos', // 'treinos' | 'inbody' | 'dobras' | 'cronograma'
+        inbodySubtab: 'historico', // 'historico' | 'composicao' | 'segmentar'
+        mesocycle: 'Mesociclo 01 (Mensal)',
+        activeWeek: 3,
+        activeSplit: 'A',
+        workoutDate: new Date().toISOString().slice(0, 10),
+        waPhone: '',
+        profile: {
+          name: queryStudentName || 'Gabriela Lima',
+          idCode: queryStudentId || 'gabriela-laroc',
+          heightCm: 166,
+          age: 42,
+          sex: 'F'
+        },
+        sessionNotes: {
+          '3_A': 'Ótima progressão de carga no Agachamento e Leg Press mantendo amplitude!'
+        },
+        // 1. DADOS REAIS DO HISTÓRICO INBODY 770 DAS FOTOS ENVIADAS
+        inbodyHistory: [
+          { date: '28.05.25', weight: 56.3, smm: 26.1, pgc: 17.5, aec: 0.362 },
+          { date: '29.07.25', weight: 56.0, smm: 25.7, pgc: 18.7, aec: 0.360 },
+          { date: '15.10.25', weight: 56.6, smm: 25.4, pgc: 19.9, aec: 0.365 },
+          { date: '18.12.25', weight: 56.7, smm: 25.8, pgc: 18.6, aec: 0.368 },
+          { date: '25.02.26', weight: 58.9, smm: 26.1, pgc: 21.2, aec: 0.364 },
+          { date: '29.04.26', weight: 59.6, smm: 26.7, pgc: 20.1, aec: 0.366 },
+          { date: '14.07.26', weight: 58.6, smm: 25.7, pgc: 22.0, aec: 0.362 },
+          { date: '08.10.26', weight: 60.7, smm: 25.6, pgc: 24.1, aec: 0.371 }
+        ],
+        // DADOS DETALHADOS DO EXAME DE 08.10.2026 (InBody 770)
+        inbodyDetails: {
+          score: 81,
+          weight: 60.7,
+          smm: 25.6,
+          fatMass: 14.6,
+          bmi: 22.0,
+          pgc: 24.1,
+          aecRatio: 0.371,
+          tbw: 33.6, // Água Corporal Total (L)
+          icw: 21.2, // Água Intracelular (L)
+          ecw: 12.4, // Água Extracelular (L)
+          protein: 9.3, // Proteína (kg)
+          minerals: 3.25, // Minerais (kg)
+          ffm: 46.1, // Massa Livre de Gordura (kg)
+          bmr: 1365, // Taxa Metabólica Basal (kcal)
+          whr: 0.88, // Relação Cintura-Quadril
+          waistCm: 81.1, // Circunferência da Cintura (cm)
+          armCm: 29.9, // Circunferência do Braço (cm)
+          visceralLevel: 5, // Nível de Gordura Visceral
+          visceralArea: 59.0, // Área de Gordura Visceral AGV (cm²)
+          obesityDegree: 105, // Grau de Obesidade (%)
+          ffmi: 16.7 // IMLG (kg/m²)
+        },
+        // ANÁLISE SEGMENTAR REAL DO EXAME DE 08.10.2026
+        inbodySegmental: [
+          { id: 'bd', label: 'Braço Direito', leanKg: 2.36, leanPct: 109.8, fatKg: 0.8, fatPct: 84.1, aec: 0.365 },
+          { id: 'be', label: 'Braço Esquerdo', leanKg: 2.34, leanPct: 109.1, fatKg: 0.8, fatPct: 85.1, aec: 0.365 },
+          { id: 'tr', label: 'Tronco', leanKg: 20.7, leanPct: 106.2, fatKg: 7.4, fatPct: 136.1, aec: 0.373 },
+          { id: 'pd', label: 'Perna Direita', leanKg: 6.89, leanPct: 101.6, fatKg: 2.3, fatPct: 91.2, aec: 0.368 },
+          { id: 'pe', label: 'Perna Esquerda', leanKg: 6.97, leanPct: 102.7, fatKg: 2.3, fatPct: 91.2, aec: 0.370 }
+        ],
+        // 2. EXERCÍCIOS E PROGRESSÃO DE CARGAS (TREINOS A, B, C e D)
+        workouts: {
+          A: [
+            {
+              id: 'a1', name: '1. Agachamento Livre na Barra', target: '4x 8 a 10 reps', rir: 'RIR 1-2',
+              weeks: {
+                1: { load: 40, reps: 10, effort: 'RIR 2', note: '', done: true },
+                2: { load: 44, reps: 9, effort: 'RIR 1', note: 'Boa firmeza', done: true },
+                3: { load: 48, reps: 8, effort: 'RIR 1', note: 'Subi +4kg hoje!', done: true },
+                4: { load: '', reps: '', effort: 'RIR 1', note: '', done: false }
+              }
+            },
+            {
+              id: 'a2', name: '2. Leg Press 45°', target: '4x 10 a 12 reps', rir: 'RIR 1',
+              weeks: {
+                1: { load: 120, reps: 12, effort: 'RIR 2', note: '', done: true },
+                2: { load: 135, reps: 11, effort: 'RIR 1', note: '', done: true },
+                3: { load: 150, reps: 10, effort: 'RIR 1', note: 'Amplitude máxima', done: true },
+                4: { load: '', reps: '', effort: 'RIR 1', note: '', done: false }
+              }
+            },
+            {
+              id: 'a3', name: '3. Afundo Búlgaro c/ Halteres', target: '3x 10 reps (cada)', rir: 'RIR 1',
+              weeks: {
+                1: { load: 12, reps: 10, effort: 'RIR 1', note: '', done: true },
+                2: { load: 14, reps: 10, effort: 'RIR 1', note: '', done: true },
+                3: { load: 16, reps: 9, effort: 'RIR 1', note: '', done: true },
+                4: { load: '', reps: '', effort: 'RIR 1', note: '', done: false }
+              }
+            },
+            {
+              id: 'a4', name: '4. Cadeira Extensora', target: '4x 12 a 15 reps', rir: 'RIR 0-1',
+              weeks: {
+                1: { load: 45, reps: 14, effort: 'RIR 1', note: '', done: true },
+                2: { load: 50, reps: 12, effort: 'RIR 1', note: '', done: true },
+                3: { load: 55, reps: 12, effort: 'Falha/RIR 0', note: '', done: false },
+                4: { load: '', reps: '', effort: 'RIR 1', note: '', done: false }
+              }
+            },
+            {
+              id: 'a5', name: '5. Panturrilha no Leg / Máquina', target: '4x 15 reps (1s pico)', rir: 'RIR 1',
+              weeks: {
+                1: { load: 50, reps: 15, effort: 'RIR 1', note: '', done: true },
+                2: { load: 55, reps: 15, effort: 'RIR 1', note: '', done: true },
+                3: { load: 60, reps: 14, effort: 'RIR 1', note: '', done: false },
+                4: { load: '', reps: '', effort: 'RIR 1', note: '', done: false }
+              }
+            }
+          ],
+          B: [
+            {
+              id: 'b1', name: '1. Puxada Alta Frontal (Pulley)', target: '4x 8 a 10 reps', rir: 'RIR 1-2',
+              weeks: {
+                1: { load: 35, reps: 10, effort: 'RIR 2', note: '', done: true },
+                2: { load: 38, reps: 10, effort: 'RIR 1', note: '', done: true },
+                3: { load: 42, reps: 9, effort: 'RIR 1', note: '', done: true },
+                4: { load: '', reps: '', effort: 'RIR 1', note: '', done: false }
+              }
+            },
+            {
+              id: 'b2', name: '2. Remada Baixa no Triângulo', target: '4x 10 a 12 reps', rir: 'RIR 1',
+              weeks: {
+                1: { load: 30, reps: 12, effort: 'RIR 1', note: '', done: true },
+                2: { load: 35, reps: 10, effort: 'RIR 1', note: '', done: true },
+                3: { load: 38, reps: 10, effort: 'RIR 1', note: '', done: true },
+                4: { load: '', reps: '', effort: 'RIR 1', note: '', done: false }
+              }
+            },
+            {
+              id: 'b3', name: '3. Supino Inclinado c/ Halteres', target: '3x 8 a 10 reps', rir: 'RIR 1-2',
+              weeks: {
+                1: { load: 10, reps: 10, effort: 'RIR 2', note: '', done: true },
+                2: { load: 12, reps: 9, effort: 'RIR 1', note: '', done: true },
+                3: { load: 14, reps: 8, effort: 'RIR 1', note: '', done: false },
+                4: { load: '', reps: '', effort: 'RIR 1', note: '', done: false }
+              }
+            },
+            {
+              id: 'b4', name: '4. Desenvolvimento c/ Halteres', target: '3x 10 a 12 reps', rir: 'RIR 1',
+              weeks: {
+                1: { load: 8, reps: 12, effort: 'RIR 1', note: '', done: true },
+                2: { load: 9, reps: 10, effort: 'RIR 1', note: '', done: true },
+                3: { load: 10, reps: 10, effort: 'RIR 1', note: '', done: false },
+                4: { load: '', reps: '', effort: 'RIR 1', note: '', done: false }
+              }
+            }
+          ],
+          C: [
+            {
+              id: 'c1', name: '1. Elevação Pélvica na Barra', target: '4x 8 a 10 reps (2s pico)', rir: 'RIR 1',
+              weeks: {
+                1: { load: 65, reps: 10, effort: 'RIR 2', note: '', done: true },
+                2: { load: 75, reps: 10, effort: 'RIR 1', note: '', done: true },
+                3: { load: 85, reps: 8, effort: 'RIR 1', note: 'Recorde pessoal!', done: true },
+                4: { load: '', reps: '', effort: 'RIR 1', note: '', done: false }
+              }
+            },
+            {
+              id: 'c2', name: '2. Levantamento Terra Romeno (RDL)', target: '4x 8 a 10 reps', rir: 'RIR 2',
+              weeks: {
+                1: { load: 38, reps: 10, effort: 'RIR 2', note: '', done: true },
+                2: { load: 42, reps: 10, effort: 'RIR 1', note: '', done: true },
+                3: { load: 46, reps: 9, effort: 'RIR 1', note: '', done: true },
+                4: { load: '', reps: '', effort: 'RIR 1', note: '', done: false }
+              }
+            },
+            {
+              id: 'c3', name: '3. Mesa Flexora', target: '4x 10 a 12 reps', rir: 'RIR 1',
+              weeks: {
+                1: { load: 30, reps: 12, effort: 'RIR 1', note: '', done: true },
+                2: { load: 35, reps: 11, effort: 'RIR 1', note: '', done: true },
+                3: { load: 38, reps: 10, effort: 'RIR 1', note: '', done: false },
+                4: { load: '', reps: '', effort: 'RIR 1', note: '', done: false }
+              }
+            },
+            {
+              id: 'c4', name: '4. Cadeira Abdutora', target: '4x 12 a 15 reps', rir: 'RIR 0-1',
+              weeks: {
+                1: { load: 55, reps: 15, effort: 'RIR 1', note: '', done: true },
+                2: { load: 60, reps: 14, effort: 'RIR 1', note: '', done: true },
+                3: { load: 65, reps: 12, effort: 'RIR 0-1', note: '', done: false },
+                4: { load: '', reps: '', effort: 'RIR 1', note: '', done: false }
+              }
+            }
+          ],
+          D: [
+            {
+              id: 'd1', name: '1. Elevação Lateral c/ Halteres', target: '4x 12 a 15 reps', rir: 'RIR 1',
+              weeks: {
+                1: { load: 6, reps: 14, effort: 'RIR 1', note: '', done: true },
+                2: { load: 7, reps: 12, effort: 'RIR 1', note: '', done: true },
+                3: { load: 8, reps: 12, effort: 'RIR 1', note: '', done: true },
+                4: { load: '', reps: '', effort: 'RIR 1', note: '', done: false }
+              }
+            },
+            {
+              id: 'd2', name: '2. Crucifixo Inverso / Face Pull', target: '3x 12 a 15 reps', rir: 'RIR 1',
+              weeks: {
+                1: { load: 20, reps: 15, effort: 'RIR 1', note: '', done: true },
+                2: { load: 25, reps: 12, effort: 'RIR 1', note: '', done: true },
+                3: { load: 28, reps: 12, effort: 'RIR 1', note: '', done: false },
+                4: { load: '', reps: '', effort: 'RIR 1', note: '', done: false }
+              }
+            },
+            {
+              id: 'd3', name: '3. Tríceps Corda na Polia', target: '3x 10 a 12 reps', rir: 'RIR 1',
+              weeks: {
+                1: { load: 15, reps: 12, effort: 'RIR 1', note: '', done: true },
+                2: { load: 18, reps: 10, effort: 'RIR 1', note: '', done: true },
+                3: { load: 20, reps: 10, effort: 'RIR 1', note: '', done: false },
+                4: { load: '', reps: '', effort: 'RIR 1', note: '', done: false }
+              }
+            },
+            {
+              id: 'd4', name: '4. Rosca Direta c/ Halteres', target: '3x 10 a 12 reps', rir: 'RIR 1',
+              weeks: {
+                1: { load: 7, reps: 12, effort: 'RIR 1', note: '', done: true },
+                2: { load: 8, reps: 10, effort: 'RIR 1', note: '', done: true },
+                3: { load: 9, reps: 10, effort: 'RIR 1', note: '', done: false },
+                4: { load: '', reps: '', effort: 'RIR 1', note: '', done: false }
+              }
+            }
+          ]
+        },
+        // 3. DOBRAS CUTÂNEAS (ADIPÔMETRO) E PERIMETRIA
+        skinfoldProtocol: 'P7', // 'P3' | 'P7' | 'ALL'
+        skinfolds: [
+          { id: 'triceps', name: 'Tríceps', dir: 'Vertical (posterior do braço)', prev: 17, val: 15, p1: 15, p2: 16, p3: 14, show3x: false, protocols: ['P3', 'P7', 'ALL'] },
+          { id: 'suprailiac', name: 'Supra-ilíaca', dir: 'Oblíqua (acima da crista ilíaca)', prev: 20, val: 17, p1: 17, p2: 17, p3: 17, show3x: false, protocols: ['P3', 'P7', 'ALL'] },
+          { id: 'thigh', name: 'Coxa Medial', dir: 'Vertical (terço médio anterior)', prev: 25, val: 22, p1: 22, p2: 23, p3: 21, show3x: false, protocols: ['P3', 'P7', 'ALL'] },
+          { id: 'subscapular', name: 'Subescapular', dir: 'Oblíqua 45° (ângulo inferior)', prev: 16, val: 14, p1: 14, p2: 14, p3: 14, show3x: false, protocols: ['P7', 'ALL'] },
+          { id: 'axillary', name: 'Axilar Média', dir: 'Oblíqua / Horizontal (xifoide)', prev: 12, val: 10, p1: 10, p2: 10, p3: 10, show3x: false, protocols: ['P7', 'ALL'] },
+          { id: 'chest', name: 'Torácica / Peitoral', dir: 'Diagonal (linha axilar-mamilo)', prev: 10, val: 9, p1: 9, p2: 9, p3: 9, show3x: false, protocols: ['P7', 'ALL'] },
+          { id: 'abdominal', name: 'Abdominal', dir: 'Vertical (2cm lateral à cicatriz)', prev: 23, val: 19, p1: 19, p2: 20, p3: 18, show3x: false, protocols: ['P7', 'ALL'] },
+          { id: 'biceps', name: 'Bíceps', dir: 'Vertical (anterior do braço)', prev: 9, val: 8, p1: 8, p2: 8, p3: 8, show3x: false, protocols: ['ALL'] },
+          { id: 'calf', name: 'Panturrilha Medial', dir: 'Vertical (maior perímetro medial)', prev: 14, val: 12, p1: 12, p2: 12, p3: 12, show3x: false, protocols: ['ALL'] }
+        ],
+        skinfoldHistory: [
+          { date: '14.07.26', sumMm: 123, waistCm: 83.5 },
+          { date: '08.10.26', sumMm: 114, waistCm: 81.1 },
+          { date: '10.11.26', sumMm: 106, waistCm: 79.8 }
+        ],
+        measurements: {
+          trunk: [
+            { id: 'chest', label: 'Tórax / Peitoral', prev: 88.5, cur: 89.0 },
+            { id: 'waist', label: 'Cintura (Menor Perímetro)', prev: 82.4, cur: 81.1 },
+            { id: 'abdomen', label: 'Abdômen (Cicatriz Umbilical)', prev: 85.5, cur: 84.0 },
+            { id: 'hip', label: 'Quadril / Glúteo (Maior)', prev: 91.5, cur: 92.2 }
+          ],
+          bilateral: [
+            { id: 'armRelax', label: 'Braço Relaxado', right: 29.9, left: 29.7 },
+            { id: 'armFlex', label: 'Braço Contraído', right: 31.4, left: 31.2 },
+            { id: 'thighMed', label: 'Coxa Média', right: 57.5, left: 57.8 },
+            { id: 'calfPerim', label: 'Panturrilha', right: 36.8, left: 36.7 }
+          ]
+        },
+        // 4. CRONOGRAMA DAS 4 SEMANAS (MICROCICLOS)
+        schedule: {
+          1: { days: ['A', 'B', 'Desc', 'C', 'D', 'Cardio', 'Desc'], weight: '59.8' },
+          2: { days: ['A', 'B', 'Desc', 'C', 'D', 'A', 'Desc'], weight: '60.2' },
+          3: { days: ['B', 'C', 'Desc', 'D', 'A', 'Cardio', 'Desc'], weight: '60.7' },
+          4: { days: ['A', 'B', 'Desc', 'C', 'D', 'Cardio', 'Desc'], weight: '' }
+        }
+      };
+      return stateObj;
+    }
+
+    const effectiveStorageKey = queryStudentId ? `${STORAGE_KEY}_${queryStudentId}` : STORAGE_KEY;
+    let state = loadState();
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(effectiveStorageKey);
+        if (!raw) return getInitialState();
+        return { ...getInitialState(), ...JSON.parse(raw) };
+      } catch (e) {
+        return getInitialState();
+      }
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(effectiveStorageKey, JSON.stringify(state));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function showToast(msg) {
+      const box = document.getElementById('toast');
+      document.getElementById('toastText').textContent = msg;
+      box.classList.remove('hidden');
+      box.classList.add('flex', 'animate-pop');
+      clearTimeout(window._phToastTimer);
+      window._phToastTimer = setTimeout(() => {
+        box.classList.add('hidden');
+        box.classList.remove('flex');
+      }, 2400);
+    }
+
+    function refreshIcons() {
+      if (window.lucide) {
+        window.lucide.createIcons();
+      }
+    }
+
+    // ==================== RENDERIZAÇÃO CENTRAL ====================
+    function renderApp() {
+      renderHeader();
+      renderMainNavigation();
+      renderWorkoutTab();
+      renderInbodyTab();
+      renderSkinfoldsTab();
+      renderScheduleTab();
+      refreshIcons();
+    }
+
+    function renderHeader() {
+      const p = state.profile;
+      document.getElementById('headerStudentName').textContent = p.name;
+      document.getElementById('headerStudentMeta').innerHTML = `ID: ${escapeHtml(p.idCode)} • ${p.heightCm}cm • ${p.age} anos • <span class="text-[#00E5FF] font-semibold">InBody ${state.inbodyDetails.score}/100</span>`;
+    }
+
+    function renderMainNavigation() {
+      const tabs = ['treinos', 'inbody', 'dobras', 'cronograma'];
+      tabs.forEach(t => {
+        const sec = document.getElementById(`tab-${t}`);
+        const btn = document.getElementById(`navTab-${t}`);
+        if (state.activeTab === t) {
+          sec.classList.remove('hidden');
+          btn.className = 'flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all bg-[#8FFF00]/15 text-[#8FFF00] border border-[#8FFF00]/40';
+        } else {
+          sec.classList.add('hidden');
+          btn.className = 'flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all text-slate-400 hover:text-slate-200';
+        }
+      });
+    }
+
+    function switchMainTab(tabName) {
+      state.activeTab = tabName;
+      saveState();
+      renderApp();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // =========================================================================
+    // MÓDULO 1: ABA TREINOS (ABCD) + INPUT DIÁRIO DE CARGAS + GRÁFICO EM TEMPO REAL
+    // =========================================================================
+    function renderWorkoutTab() {
+      document.getElementById('mesocycleSelect').value = state.mesocycle;
+      document.getElementById('workoutDateInput').value = state.workoutDate;
+
+      for (let w = 1; w <= 4; w++) {
+        const pill = document.getElementById(`weekPill-${w}`);
+        if (w === state.activeWeek) {
+          pill.className = 'py-1.5 px-1 rounded-lg text-center transition-all bg-[#8FFF00] text-slate-950 font-extrabold shadow';
+        } else {
+          pill.className = 'py-1.5 px-1 rounded-lg text-center transition-all text-slate-400 hover:text-white';
+        }
+      }
+
+      ['A', 'B', 'C', 'D'].forEach(sp => {
+        const b = document.getElementById(`splitBtn-${sp}`);
+        if (sp === state.activeSplit) {
+          b.className = 'p-2.5 rounded-xl border border-[#8FFF00] bg-[#8FFF00]/15 text-white shadow text-left transition-all';
+        } else {
+          b.className = 'p-2.5 rounded-xl border border-slate-800 bg-[#141C2B] text-slate-400 hover:text-white text-left transition-all';
+        }
+      });
+
+      const sp = state.activeSplit;
+      const wk = state.activeWeek;
+      const exercises = state.workouts[sp] || [];
+
+      document.getElementById('addExSplitLabel').textContent = `Treino ${sp}`;
+      document.getElementById('workoutChartTitle').textContent = `Evolução de Cargas — Treino ${sp} (Sem 1 a Sem 4)`;
+      document.getElementById('workoutSessionNoteInput').value = state.sessionNotes[`${wk}_${sp}`] || '';
+
+      // Atualizar barra de progresso de exercícios concluídos
+      const doneCount = exercises.filter(ex => ex.weeks[wk]?.done).length;
+      const pct = exercises.length ? Math.round((doneCount / exercises.length) * 100) : 0;
+      document.getElementById('workoutProgressBar').style.width = `${pct}%`;
+      document.getElementById('workoutProgressText').textContent = `${doneCount}/${exercises.length}`;
+
+      // Renderizar Gráfico de Evolução de Cargas do Treino Atual
+      renderWorkoutLoadChart();
+
+      // Renderizar Cards de Exercícios
+      const listEl = document.getElementById('exerciseListContainer');
+      listEl.innerHTML = '';
+
+      exercises.forEach((ex, idx) => {
+        const cur = ex.weeks[wk] || { load: '', reps: '', effort: 'RIR 1', note: '', done: false };
+        
+        // Buscar última carga anterior
+        let prevLoad = null;
+        let prevReps = null;
+        let prevWeekNum = null;
+        for (let pw = wk - 1; pw >= 1; pw--) {
+          if (ex.weeks[pw] && ex.weeks[pw].load !== '' && ex.weeks[pw].load !== null) {
+            prevLoad = parseFloat(ex.weeks[pw].load);
+            prevReps = ex.weeks[pw].reps;
+            prevWeekNum = pw;
+            break;
+          }
+        }
+
+        // Comparar com Semana 1 para badge de evolução
+        const w1Load = parseFloat(ex.weeks[1]?.load);
+        const activeLoad = cur.load !== '' ? parseFloat(cur.load) : prevLoad;
+        let progBadge = '';
+        if (!isNaN(w1Load) && w1Load > 0 && activeLoad !== null && !isNaN(activeLoad)) {
+          const diff = +(activeLoad - w1Load).toFixed(1);
+          const pctGain = Math.round((diff / w1Load) * 100);
+          if (diff > 0) {
+            progBadge = `<span class="text-[10px] font-extrabold px-2 py-0.5 rounded bg-[#8FFF00]/20 text-[#8FFF00] border border-[#8FFF00]/40">+${diff} kg (+${pctGain}%)</span>`;
+          } else if (diff === 0) {
+            progBadge = `<span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-300">Carga mantida</span>`;
+          }
+        }
+
+        const card = document.createElement('div');
+        card.className = `rounded-2xl bg-[#141C2B] border border-slate-800 p-3.5 transition-all ${cur.done ? 'card-done' : ''}`;
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-2 mb-2">
+            <div>
+              <h3 class="font-bold text-sm text-white leading-snug">${escapeHtml(ex.name)}</h3>
+              <div class="flex items-center gap-1.5 mt-1 flex-wrap">
+                <span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/30">
+                  ${escapeHtml(ex.target)}
+                </span>
+                <span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                  ${escapeHtml(ex.rir)}
+                </span>
+                ${progBadge}
+              </div>
+            </div>
+
+            <button
+              onclick="toggleExDone('${sp}', ${idx})"
+              class="px-2.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 border transition shrink-0 ${
+                cur.done
+                  ? 'bg-[#8FFF00] text-slate-950 border-[#8FFF00]'
+                  : 'bg-[#0B0F17] text-slate-300 border-slate-700 hover:border-[#8FFF00]'
+              }"
+            >
+              <span>${cur.done ? '✓ Feito' : 'Marcar'}</span>
+            </button>
+          </div>
+
+          <!-- Referência da Semana Anterior + Botão 1 Toque "Repetir Carga" -->
+          <div class="flex items-center justify-between bg-[#0B0F17] border border-slate-800/90 rounded-xl px-2.5 py-1.5 mb-2.5 text-[11px]">
+            <span class="text-slate-400">
+              ${
+                prevLoad !== null
+                  ? `Última carga (Sem ${prevWeekNum}): <strong class="text-white">${prevLoad} kg ${prevReps ? `(${prevReps}r)` : ''}</strong>`
+                  : 'Sem carga anterior registrada'
+              }
+            </span>
+            ${
+              prevLoad !== null
+                ? `<button onclick="repeatPrevLoad('${sp}', ${idx}, ${prevLoad}, '${prevReps || 10}')" class="text-[#00E5FF] hover:underline font-bold text-[10px]">Repetir ${prevLoad}kg</button>`
+                : ''
+            }
+          </div>
+
+          <!-- Inputs Principais da Aluna: CARGA HOJE (KG) e REPS FEITAS -->
+          <div class="grid grid-cols-2 gap-2.5 mb-2.5">
+            <div class="bg-[#0B0F17] border border-slate-800 focus-within:border-[#8FFF00] rounded-xl p-2">
+              <label class="block text-[9px] font-bold uppercase tracking-wider text-[#8FFF00] mb-1">
+                Carga Hoje (kg)
+              </label>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="adjustExLoad('${sp}', ${idx}, -1)" class="w-7 h-7 rounded-lg bg-[#141C2B] hover:bg-slate-700 text-white font-bold text-sm flex items-center justify-center shrink-0">-</button>
+                <input
+                  type="number"
+                  step="0.5"
+                  inputmode="decimal"
+                  value="${cur.load}"
+                  placeholder="${prevLoad !== null ? prevLoad : '0'}"
+                  oninput="onWorkoutLoadInput('${sp}', ${idx}, 'load', this.value)"
+                  class="w-full bg-transparent text-center font-rajdhani font-bold text-lg text-white focus:outline-none"
+                />
+                <button type="button" onclick="adjustExLoad('${sp}', ${idx}, 1)" class="w-7 h-7 rounded-lg bg-[#141C2B] hover:bg-slate-700 text-[#8FFF00] font-bold text-sm flex items-center justify-center shrink-0">+</button>
+              </div>
+            </div>
+
+            <div class="bg-[#0B0F17] border border-slate-800 focus-within:border-[#00E5FF] rounded-xl p-2">
+              <label class="block text-[9px] font-bold uppercase tracking-wider text-[#00E5FF] mb-1">
+                Reps Feitas Hoje
+              </label>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="adjustExReps('${sp}', ${idx}, -1)" class="w-7 h-7 rounded-lg bg-[#141C2B] hover:bg-slate-700 text-white font-bold text-sm flex items-center justify-center shrink-0">-</button>
+                <input
+                  type="number"
+                  inputmode="numeric"
+                  value="${cur.reps}"
+                  placeholder="10"
+                  oninput="onWorkoutLoadInput('${sp}', ${idx}, 'reps', this.value)"
+                  class="w-full bg-transparent text-center font-rajdhani font-bold text-lg text-white focus:outline-none"
+                />
+                <button type="button" onclick="adjustExReps('${sp}', ${idx}, 1)" class="w-7 h-7 rounded-lg bg-[#141C2B] hover:bg-slate-700 text-[#00E5FF] font-bold text-sm flex items-center justify-center shrink-0">+</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Esforço RIR + Observação Rápida -->
+          <div class="grid grid-cols-12 gap-2 items-center">
+            <div class="col-span-5">
+              <select
+                onchange="onWorkoutLoadInput('${sp}', ${idx}, 'effort', this.value)"
+                class="w-full bg-[#0B0F17] border border-slate-800 rounded-xl px-2 py-1.5 text-[11px] text-slate-200 focus:outline-none focus:border-[#8FFF00]"
+              >
+                <option value="RIR 2 (Fácil)" ${cur.effort === 'RIR 2' || cur.effort === 'RIR 2 (Fácil)' ? 'selected' : ''}>🟢 RIR 2 (Subir próx)</option>
+                <option value="RIR 1" ${cur.effort === 'RIR 1' ? 'selected' : ''}>🔵 RIR 1 (Na meta)</option>
+                <option value="Falha/RIR 0" ${cur.effort === 'Falha/RIR 0' ? 'selected' : ''}>🟠 RIR 0 / Limite</option>
+              </select>
+            </div>
+            <div class="col-span-6">
+              <input
+                type="text"
+                value="${escapeHtml(cur.note || '')}"
+                placeholder="Obs do exercício..."
+                oninput="onWorkoutLoadInput('${sp}', ${idx}, 'note', this.value)"
+                class="w-full bg-[#0B0F17] border border-slate-800 rounded-xl px-2.5 py-1.5 text-[11px] text-white placeholder-slate-500 focus:outline-none focus:border-[#8FFF00]"
+              />
+            </div>
+            <div class="col-span-1 flex justify-end">
+              <button onclick="deleteExercise('${sp}', ${idx})" class="text-slate-600 hover:text-rose-400 p-1" title="Excluir exercício">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>
+        `;
+        listEl.appendChild(card);
+      });
+    }
+
+    // Gráfico interativo de barras/linhas comparando Sem 1 a Sem 4 de cada exercício do treino ativo
+    function renderWorkoutLoadChart() {
+      const container = document.getElementById('workoutLoadChartContainer');
+      const sp = state.activeSplit;
+      const exercises = state.workouts[sp] || [];
+
+      if (exercises.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-500 py-2">Sem exercícios cadastrados.</p>`;
+        return;
+      }
+
+      let rowsHtml = '';
+      exercises.forEach(ex => {
+        const wLoads = [1, 2, 3, 4].map(w => parseFloat(ex.weeks[w]?.load) || 0);
+        const maxExLoad = Math.max(...wLoads, 10);
+        const shortName = ex.name.replace(/^\d+\.\s*/, '');
+
+        let barsHtml = '';
+        for (let w = 1; w <= 4; w++) {
+          const val = wLoads[w - 1];
+          const widthPct = val > 0 ? Math.max(18, Math.round((val / maxExLoad) * 100)) : 8;
+          const isCurWeek = w === state.activeWeek;
+          const barColor = isCurWeek
+            ? 'bg-[#8FFF00] text-slate-950 font-extrabold'
+            : val > 0
+            ? 'bg-[#00E5FF]/30 text-[#00E5FF] border border-[#00E5FF]/40 font-bold'
+            : 'bg-slate-800/60 text-slate-500';
+
+          barsHtml += `
+            <div class="flex flex-col items-center">
+              <div class="w-full bg-[#0B0F17] rounded-lg p-1 border ${isCurWeek ? 'border-[#8FFF00]/60' : 'border-slate-800/80'} text-center">
+                <span class="block text-[9px] text-slate-400">S${w}</span>
+                <div class="mt-0.5 rounded px-1 py-0.5 text-[10px] ${barColor}" style="width: 100%">
+                  ${val > 0 ? `${val}kg` : '—'}
+                </div>
+              </div>
+            </div>
+          `;
+        }
+
+        rowsHtml += `
+          <div class="bg-[#0B0F17]/90 border border-slate-800/80 rounded-xl p-2 mb-1.5 last:mb-0">
+            <div class="flex items-center justify-between text-[11px] mb-1">
+              <span class="font-bold text-slate-200 truncate">${escapeHtml(shortName)}</span>
+              <span class="text-[10px] text-[#8FFF00] font-semibold">Sem ${state.activeWeek}: ${wLoads[state.activeWeek - 1] > 0 ? wLoads[state.activeWeek - 1] + ' kg' : 'Pendente'}</span>
+            </div>
+            <div class="grid grid-cols-4 gap-1.5">
+              ${barsHtml}
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = rowsHtml;
+    }
+
+    function onWorkoutLoadInput(sp, idx, field, val) {
+      const wk = state.activeWeek;
+      const ex = state.workouts[sp][idx];
+      if (!ex.weeks[wk]) ex.weeks[wk] = { load: '', reps: '', effort: 'RIR 1', note: '', done: false };
+      ex.weeks[wk][field] = val;
+      if (field === 'load' && val !== '') {
+        ex.weeks[wk].done = true;
+      }
+      saveState();
+      // Atualiza imediatamente o gráfico de evolução de cargas e os contadores sem perder o foco do teclado
+      renderWorkoutLoadChart();
+      const exercises = state.workouts[sp];
+      const doneCount = exercises.filter(e => e.weeks[wk]?.done).length;
+      const pct = exercises.length ? Math.round((doneCount / exercises.length) * 100) : 0;
+      document.getElementById('workoutProgressBar').style.width = `${pct}%`;
+      document.getElementById('workoutProgressText').textContent = `${doneCount}/${exercises.length}`;
+    }
+
+    function adjustExLoad(sp, idx, delta) {
+      const wk = state.activeWeek;
+      const ex = state.workouts[sp][idx];
+      let base = parseFloat(ex.weeks[wk]?.load);
+      if (isNaN(base)) {
+        for (let pw = wk - 1; pw >= 1; pw--) {
+          if (ex.weeks[pw]?.load !== '') {
+            base = parseFloat(ex.weeks[pw].load);
+            break;
+          }
+        }
+      }
+      if (isNaN(base)) base = 10;
+      ex.weeks[wk].load = Math.max(0, +(base + delta).toFixed(1));
+      ex.weeks[wk].done = true;
+      saveState();
+      renderWorkoutTab();
+      refreshIcons();
+    }
+
+    function adjustExReps(sp, idx, delta) {
+      const wk = state.activeWeek;
+      const ex = state.workouts[sp][idx];
+      const base = parseInt(ex.weeks[wk]?.reps, 10) || 10;
+      ex.weeks[wk].reps = Math.max(1, base + delta);
+      saveState();
+      renderWorkoutTab();
+      refreshIcons();
+    }
+
+    function repeatPrevLoad(sp, idx, loadVal, repsVal) {
+      const wk = state.activeWeek;
+      const ex = state.workouts[sp][idx];
+      ex.weeks[wk].load = loadVal;
+      ex.weeks[wk].reps = repsVal;
+      ex.weeks[wk].done = true;
+      saveState();
+      renderWorkoutTab();
+      refreshIcons();
+      showToast(`Carga ${loadVal} kg aplicada!`);
+    }
+
+    function toggleExDone(sp, idx) {
+      const wk = state.activeWeek;
+      const ex = state.workouts[sp][idx];
+      ex.weeks[wk].done = !ex.weeks[wk].done;
+      saveState();
+      renderWorkoutTab();
+      refreshIcons();
+    }
+
+    function deleteExercise(sp, idx) {
+      if (state.workouts[sp].length <= 1) {
+        showToast('Mantenha ao menos 1 exercício na ficha.');
+        return;
+      }
+      state.workouts[sp].splice(idx, 1);
+      saveState();
+      renderWorkoutTab();
+      refreshIcons();
+      showToast('Exercício removido.');
+    }
+
+    // =========================================================================
+    // MÓDULO 2: ABA INBODY & GRÁFICOS (TABELA EDITÁVEL -> 4 GRÁFICOS EM TEMPO REAL)
+    // =========================================================================
+    function switchInbodySubtab(sub) {
+      state.inbodySubtab = sub;
+      saveState();
+      renderInbodyTab();
+      refreshIcons();
+    }
+
+    function renderInbodyTab() {
+      document.getElementById('inbodyScoreInput').value = state.inbodyDetails.score;
+
+      const subs = ['historico', 'composicao', 'segmentar'];
+      subs.forEach(s => {
+        const btn = document.getElementById(`inbodySub-${s}`);
+        const view = document.getElementById(`inbodyView-${s}`);
+        if (state.inbodySubtab === s) {
+          view.classList.remove('hidden');
+          btn.className = 'py-1.5 px-2 rounded-lg text-[11px] font-bold transition bg-[#8FFF00] text-slate-950 shadow';
+        } else {
+          view.classList.add('hidden');
+          btn.className = 'py-1.5 px-2 rounded-lg text-[11px] font-bold transition text-slate-400 hover:text-white';
+        }
+      });
+
+      renderInbodyHistoryTable();
+      renderInbodyStackedCharts();
+      renderMuscleFatBars();
+      renderInbodyDetailedGrid();
+      renderSegmentalAnalysis();
+    }
+
+    // Tabela Editável do Histórico da Composição Corporal
+    function renderInbodyHistoryTable() {
+      const tbody = document.getElementById('inbodyHistoryTableBody');
+      tbody.innerHTML = '';
+
+      state.inbodyHistory.forEach((row, idx) => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-800/40 transition';
+        tr.innerHTML = `
+          <td class="py-1.5 px-1.5">
+            <input
+              type="text"
+              value="${escapeHtml(row.date)}"
+              oninput="updateInbodyRow(${idx}, 'date', this.value)"
+              class="w-16 bg-[#0B0F17] border border-slate-800 focus:border-[#8FFF00] rounded px-1.5 py-1 text-[11px] font-semibold text-slate-200 focus:outline-none"
+            />
+          </td>
+          <td class="py-1.5 px-1 text-center">
+            <input
+              type="number"
+              step="0.1"
+              value="${row.weight}"
+              oninput="updateInbodyRow(${idx}, 'weight', this.value)"
+              class="w-14 bg-[#0B0F17] border border-slate-800 focus:border-[#8FFF00] rounded px-1 py-1 text-center text-xs font-bold text-white focus:outline-none"
+            />
+          </td>
+          <td class="py-1.5 px-1 text-center">
+            <input
+              type="number"
+              step="0.1"
+              value="${row.smm}"
+              oninput="updateInbodyRow(${idx}, 'smm', this.value)"
+              class="w-14 bg-[#0B0F17] border border-slate-800 focus:border-[#00E5FF] rounded px-1 py-1 text-center text-xs font-bold text-[#00E5FF] focus:outline-none"
+            />
+          </td>
+          <td class="py-1.5 px-1 text-center">
+            <input
+              type="number"
+              step="0.1"
+              value="${row.pgc}"
+              oninput="updateInbodyRow(${idx}, 'pgc', this.value)"
+              class="w-14 bg-[#0B0F17] border border-slate-800 focus:border-amber-400 rounded px-1 py-1 text-center text-xs font-bold text-amber-400 focus:outline-none"
+            />
+          </td>
+          <td class="py-1.5 px-1 text-center">
+            <input
+              type="number"
+              step="0.001"
+              value="${row.aec}"
+              oninput="updateInbodyRow(${idx}, 'aec', this.value)"
+              class="w-16 bg-[#0B0F17] border border-slate-800 focus:border-rose-400 rounded px-1 py-1 text-center text-xs font-bold text-rose-400 focus:outline-none"
+            />
+          </td>
+          <td class="py-1.5 px-1 text-center">
+            <button onclick="removeInbodyRow(${idx})" class="text-slate-500 hover:text-rose-400 p-1" title="Remover data">
+              <i data-lucide="x" class="w-3.5 h-3.5"></i>
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('inbodyCountBadge').textContent = `${state.inbodyHistory.length} Avaliações`;
+    }
+
+    // Atualiza o dado na tabela e redesenha os 4 gráficos SVG instantaneamente sem perder o foco do input!
+    function updateInbodyRow(idx, field, val) {
+      if (field === 'date') {
+        state.inbodyHistory[idx].date = val;
+      } else {
+        const num = parseFloat(val);
+        state.inbodyHistory[idx][field] = isNaN(num) ? 0 : num;
+        // Sincronizar última linha com dados atuais do exame se for a última data
+        if (idx === state.inbodyHistory.length - 1) {
+          if (field === 'weight') state.inbodyDetails.weight = state.inbodyHistory[idx].weight;
+          if (field === 'smm') state.inbodyDetails.smm = state.inbodyHistory[idx].smm;
+          if (field === 'pgc') state.inbodyDetails.pgc = state.inbodyHistory[idx].pgc;
+          if (field === 'aec') state.inbodyDetails.aecRatio = state.inbodyHistory[idx].aec;
+        }
+      }
+      saveState();
+      renderInbodyStackedCharts();
+    }
+
+    function addInbodyHistoryRow() {
+      const last = state.inbodyHistory[state.inbodyHistory.length - 1] || { weight: 60.0, smm: 26.0, pgc: 22.0, aec: 0.365 };
+      state.inbodyHistory.push({
+        date: '10.11.26',
+        weight: +(last.weight - 0.5).toFixed(1),
+        smm: +(last.smm + 0.4).toFixed(1),
+        pgc: +(last.pgc - 1.1).toFixed(1),
+        aec: +(last.aec - 0.002).toFixed(3)
+      });
+      saveState();
+      renderInbodyHistoryTable();
+      renderInbodyStackedCharts();
+      refreshIcons();
+      showToast('Nova avaliação adicionada ao gráfico InBody!');
+    }
+
+    function removeInbodyRow(idx) {
+      if (state.inbodyHistory.length <= 2) {
+        showToast('Mantenha pelo menos 2 datas para gerar a curva de evolução.');
+        return;
+      }
+      state.inbodyHistory.splice(idx, 1);
+      saveState();
+      renderInbodyHistoryTable();
+      renderInbodyStackedCharts();
+      refreshIcons();
+    }
+
+    // GERADOR DOS 4 GRÁFICOS EMPILHADOS EM SVG IDÊNTICOS AO LAUDO INBODY 770
+    function renderInbodyStackedCharts() {
+      const container = document.getElementById('inbodyStackedChartsContainer');
+      const data = state.inbodyHistory;
+      if (!data || data.length === 0) return;
+
+      const metrics = [
+        { key: 'weight', title: 'Peso', unit: '(kg)', color: '#F8FAFC', dotColor: '#8FFF00', decimals: 1 },
+        { key: 'smm', title: 'Massa Muscular Esquelética', unit: '(kg)', color: '#00E5FF', dotColor: '#00E5FF', decimals: 1 },
+        { key: 'pgc', title: 'PGC (Percentual de Gordura)', unit: '(%)', color: '#F59E0B', dotColor: '#F59E0B', decimals: 1 },
+        { key: 'aec', title: 'Taxa de AEC (Água Extracelular)', unit: '', color: '#F43F5E', dotColor: '#F43F5E', decimals: 3 }
+      ];
+
+      const n = data.length;
+      const colWidth = 56;
+      const svgWidth = Math.max(410, n * colWidth + 30);
+      const svgHeight = 76;
+      const padX = 28;
+      const usableW = svgWidth - padX * 2;
+
+      let html = '';
+
+      metrics.forEach((m, mIdx) => {
+        const vals = data.map(d => parseFloat(d[m.key]) || 0);
+        const minV = Math.min(...vals);
+        const maxV = Math.max(...vals);
+        const range = maxV - minV === 0 ? 1 : maxV - minV;
+
+        const firstVal = vals[0];
+        const lastVal = vals[vals.length - 1];
+        const delta = +(lastVal - firstVal).toFixed(m.decimals);
+        const deltaSign = delta > 0 ? `+${delta}` : `${delta}`;
+
+        let points = [];
+        vals.forEach((v, i) => {
+          const x = n === 1 ? svgWidth / 2 : padX + (i / (n - 1)) * usableW;
+          // Y entre 26 (topo) e 56 (base) para caber o número exatamente acima de cada ponto como no InBody
+          const y = 56 - ((v - minV) / range) * 28;
+          points.push({ x, y, v, date: data[i].date });
+        });
+
+        const polylinePoints = points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+
+        // Área preenchida sutil sob a curva
+        const areaPoints = `${points[0].x.toFixed(1)},66 ${polylinePoints} ${points[points.length - 1].x.toFixed(1)},66`;
+
+        let circlesAndLabels = '';
+        points.forEach(p => {
+          circlesAndLabels += `
+            <line x1="${p.x.toFixed(1)}" y1="12" x2="${p.x.toFixed(1)}" y2="66" stroke="#1E293B" stroke-dasharray="2,2" stroke-width="1" />
+            <circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="#0B0F17" stroke="${m.dotColor}" stroke-width="2.5" />
+            <text x="${p.x.toFixed(1)}" y="${(p.y - 8).toFixed(1)}" text-anchor="middle" fill="#FFFFFF" font-size="10.5" font-weight="700" font-family="Inter, sans-serif">
+              ${p.v.toFixed(m.decimals).replace('.', ',')}
+            </text>
+          `;
+        });
+
+        // Eixo de datas na parte inferior do último gráfico (ou em cada card compacto)
+        let datesAxis = '';
+        if (mIdx === metrics.length - 1) {
+          points.forEach(p => {
+            datesAxis += `
+              <text x="${p.x.toFixed(1)}" y="86" text-anchor="middle" fill="#94A3B8" font-size="9.5" font-weight="600" font-family="Inter, sans-serif">
+                ${escapeHtml(p.date)}
+              </text>
+            `;
+          });
+        }
+
+        const totalH = mIdx === metrics.length - 1 ? 94 : svgHeight;
+
+        html += `
+          <div class="bg-[#0B0F17] border border-slate-800/90 rounded-xl p-2.5">
+            <div class="flex items-center justify-between text-xs mb-1">
+              <div class="flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full" style="background:${m.dotColor}"></span>
+                <span class="font-bold text-slate-200">${m.title} <span class="text-slate-400 font-normal">${m.unit}</span></span>
+              </div>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#141C2B] border border-slate-800 text-slate-300">
+                Δ Período: <strong style="color:${m.dotColor}">${deltaSign.replace('.', ',')} ${m.unit}</strong>
+              </span>
+            </div>
+            <svg width="${svgWidth}" height="${totalH}" viewBox="0 0 ${svgWidth} ${totalH}" class="w-full h-auto overflow-visible">
+              <polygon points="${areaPoints}" fill="${m.dotColor}" fill-opacity="0.08" />
+              <polyline fill="none" stroke="${m.color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" points="${polylinePoints}" />
+              ${circlesAndLabels}
+              ${datesAxis}
+            </svg>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    // Sub-aba 2.2: Barras Músculo-Gordura e Obesidade (com faixas Abaixo / Normal / Acima)
+    function renderMuscleFatBars() {
+      const container = document.getElementById('muscleFatBarsContainer');
+      const d = state.inbodyDetails;
+
+      const items = [
+        { key: 'weight', label: 'Peso (kg)', val: d.weight, minRef: 49.2, maxRef: 66.6, maxScale: 90, color: 'bg-white' },
+        { key: 'smm', label: 'Massa Muscular Esquelética (kg)', val: d.smm, minRef: 22.0, maxRef: 27.0, maxScale: 40, color: 'bg-[#00E5FF]' },
+        { key: 'fatMass', label: 'Massa de Gordura (kg)', val: d.fatMass, minRef: 11.6, maxRef: 18.5, maxScale: 35, color: 'bg-amber-400' },
+        { key: 'bmi', label: 'IMC — Índice de Massa Corporal (kg/m²)', val: d.bmi, minRef: 18.5, maxRef: 25.0, maxScale: 38, color: 'bg-[#8FFF00]' },
+        { key: 'pgc', label: 'PGC — Percentual de Gordura (%)', val: d.pgc, minRef: 18.0, maxRef: 28.0, maxScale: 45, color: 'bg-rose-400' }
+      ];
+
+      let html = '';
+      items.forEach(item => {
+        const pctWidth = Math.min(100, Math.max(10, Math.round((item.val / item.maxScale) * 100)));
+        let statusLabel = 'Normal';
+        let statusClass = 'text-[#8FFF00] bg-[#8FFF00]/15 border-[#8FFF00]/30';
+        if (item.val < item.minRef) {
+          statusLabel = 'Abaixo';
+          statusClass = 'text-[#00E5FF] bg-[#00E5FF]/15 border-[#00E5FF]/30';
+        } else if (item.val > item.maxRef) {
+          statusLabel = 'Acima';
+          statusClass = 'text-amber-400 bg-amber-500/15 border-amber-500/30';
+        }
+
+        html += `
+          <div class="bg-[#0B0F17] border border-slate-800 rounded-xl p-2.5">
+            <div class="flex items-center justify-between gap-2 mb-1.5">
+              <div>
+                <span class="text-xs font-bold text-white">${item.label}</span>
+                <span class="block text-[10px] text-slate-400">Faixa Normal: ${item.minRef} ~ ${item.maxRef}</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded border ${statusClass}">${statusLabel}</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  value="${item.val}"
+                  oninput="updateInbodyDetail('${item.key}', this.value)"
+                  class="w-16 bg-[#141C2B] border border-slate-700 focus:border-[#8FFF00] rounded-lg px-2 py-1 text-right font-rajdhani font-bold text-sm text-white focus:outline-none"
+                />
+              </div>
+            </div>
+            <!-- Escala Abaixo / Normal / Acima -->
+            <div class="grid grid-cols-3 text-[9px] uppercase font-bold text-slate-500 mb-1 text-center">
+              <span>Abaixo</span>
+              <span class="text-slate-300">Normal</span>
+              <span>Acima</span>
+            </div>
+            <div class="w-full h-3 bg-[#141C2B] rounded-full overflow-hidden border border-slate-800 relative">
+              <div class="h-full ${item.color} rounded-full transition-all duration-300" style="width: ${pctWidth}%"></div>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    function renderInbodyDetailedGrid() {
+      const container = document.getElementById('inbodyDetailedGridContainer');
+      const d = state.inbodyDetails;
+
+      const fields = [
+        { key: 'tbw', label: 'Água Corporal Total (L)', ref: '29,5 ~ 36,1 L' },
+        { key: 'icw', label: 'Água Intracelular (L)', ref: '18,3 ~ 22,3 L' },
+        { key: 'ecw', label: 'Água Extracelular (L)', ref: '11,2 ~ 13,6 L' },
+        { key: 'protein', label: 'Proteína (kg)', ref: '7,9 ~ 9,7 kg' },
+        { key: 'minerals', label: 'Minerais (kg)', ref: '2,73 ~ 3,33 kg' },
+        { key: 'ffm', label: 'Massa Livre Gordura (kg)', ref: '40,1 ~ 49,0 kg' },
+        { key: 'bmr', label: 'Taxa Metab. Basal (kcal)', ref: '1279 ~ 1481 kcal' },
+        { key: 'whr', label: 'Relação Cintura-Quadril', ref: '0,75 ~ 0,85' },
+        { key: 'waistCm', label: 'Circunf. Cintura (cm)', ref: 'InBody: 81,1 cm' },
+        { key: 'visceralLevel', label: 'Nível Gordura Visceral', ref: 'Faixa: 1 ~ 9' },
+        { key: 'visceralArea', label: 'Área Gord. Visceral (cm²)', ref: 'AGV: 59,0 cm²' },
+        { key: 'ffmi', label: 'IMLG (kg/m²)', ref: 'Índice Massa Livre' }
+      ];
+
+      container.innerHTML = fields.map(f => `
+        <div class="bg-[#0B0F17] border border-slate-800 rounded-xl p-2.5 flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <span class="block text-[11px] font-bold text-slate-200 truncate">${f.label}</span>
+            <span class="block text-[9px] text-slate-400">${f.ref}</span>
+          </div>
+          <input
+            type="number"
+            step="0.01"
+            value="${d[f.key]}"
+            oninput="updateInbodyDetail('${f.key}', this.value)"
+            class="w-16 bg-[#141C2B] border border-slate-700 focus:border-[#8FFF00] rounded-lg px-1.5 py-1 text-right font-rajdhani font-bold text-sm text-[#00E5FF] focus:outline-none shrink-0"
+          />
+        </div>
+      `).join('');
+    }
+
+    function updateInbodyDetail(key, val) {
+      const num = parseFloat(val);
+      state.inbodyDetails[key] = isNaN(num) ? 0 : num;
+      saveState();
+      renderHeader();
+      if (['weight', 'smm', 'fatMass', 'bmi', 'pgc'].includes(key)) {
+        renderMuscleFatBars();
+      }
+    }
+
+    // Sub-aba 2.3: Análise Segmentar Editável (Massa Magra vs Gordura por Segmento)
+    function renderSegmentalAnalysis() {
+      const container = document.getElementById('segmentalAnalysisContainer');
+      let html = '';
+
+      state.inbodySegmental.forEach((seg, idx) => {
+        const leanW = Math.min(100, Math.round((seg.leanPct / 150) * 100));
+        const fatW = Math.min(100, Math.round((seg.fatPct / 160) * 100));
+
+        html += `
+          <div class="bg-[#0B0F17] border border-slate-800 rounded-xl p-3 space-y-2">
+            <div class="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
+              <span class="font-rajdhani font-bold text-sm text-white uppercase">${escapeHtml(seg.label)}</span>
+              <span class="text-[10px] font-semibold text-slate-400">Taxa AEC: <strong class="text-rose-400">${seg.aec}</strong></span>
+            </div>
+
+            <!-- Barra Massa Magra Segmentar -->
+            <div class="space-y-1">
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="text-[#00E5FF] font-semibold">Massa Magra (kg / % Ideal)</span>
+                <div class="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    step="0.01"
+                    value="${seg.leanKg}"
+                    oninput="updateSegmentalItem(${idx}, 'leanKg', this.value)"
+                    class="w-14 bg-[#141C2B] border border-slate-700 rounded px-1.5 py-0.5 text-right font-bold text-xs text-white"
+                  />
+                  <span class="text-[10px] text-slate-400">kg</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value="${seg.leanPct}"
+                    oninput="updateSegmentalItem(${idx}, 'leanPct', this.value)"
+                    class="w-14 bg-[#141C2B] border border-slate-700 rounded px-1.5 py-0.5 text-right font-bold text-xs text-[#00E5FF]"
+                  />
+                  <span class="text-[10px] text-slate-400">%</span>
+                </div>
+              </div>
+              <div class="w-full h-2.5 bg-[#141C2B] rounded-full overflow-hidden border border-slate-800">
+                <div class="h-full bg-[#00E5FF] rounded-full transition-all" style="width:${leanW}%"></div>
+              </div>
+            </div>
+
+            <!-- Barra Gordura Segmentar -->
+            <div class="space-y-1 pt-1">
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="text-amber-400 font-semibold">Gordura Segmentar (kg / %)</span>
+                <div class="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    step="0.1"
+                    value="${seg.fatKg}"
+                    oninput="updateSegmentalItem(${idx}, 'fatKg', this.value)"
+                    class="w-14 bg-[#141C2B] border border-slate-700 rounded px-1.5 py-0.5 text-right font-bold text-xs text-white"
+                  />
+                  <span class="text-[10px] text-slate-400">kg</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value="${seg.fatPct}"
+                    oninput="updateSegmentalItem(${idx}, 'fatPct', this.value)"
+                    class="w-14 bg-[#141C2B] border border-slate-700 rounded px-1.5 py-0.5 text-right font-bold text-xs text-amber-400"
+                  />
+                  <span class="text-[10px] text-slate-400">%</span>
+                </div>
+              </div>
+              <div class="w-full h-2.5 bg-[#141C2B] rounded-full overflow-hidden border border-slate-800">
+                <div class="h-full bg-amber-400 rounded-full transition-all" style="width:${fatW}%"></div>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    function updateSegmentalItem(idx, field, val) {
+      const num = parseFloat(val);
+      state.inbodySegmental[idx][field] = isNaN(num) ? 0 : num;
+      saveState();
+      renderSegmentalAnalysis();
+    }
+
+    // =========================================================================
+    // MÓDULO 3: DOBRAS CUTÂNEAS (MODO ADIPÔMETRO 3X) & PERIMETRIA BILATERAL
+    // =========================================================================
+    function setSkinfoldProtocol(proto) {
+      state.skinfoldProtocol = proto;
+      saveState();
+      renderSkinfoldsTab();
+      refreshIcons();
+    }
+
+    function renderSkinfoldsTab() {
+      ['P3', 'P7', 'ALL'].forEach(p => {
+        const b = document.getElementById(`protoBtn-${p}`);
+        if (state.skinfoldProtocol === p) {
+          b.className = 'py-1.5 px-2 rounded-lg text-[11px] font-bold transition bg-[#8FFF00] text-slate-950 shadow';
+        } else {
+          b.className = 'py-1.5 px-2 rounded-lg text-[11px] font-bold transition text-slate-400 hover:text-white';
+        }
+      });
+
+      const activeFolds = state.skinfolds.filter(f => f.protocols.includes(state.skinfoldProtocol));
+
+      // Cálculo de Jackson & Pollock + Equação de Siri em Tempo Real
+      const sumMm = activeFolds.reduce((acc, f) => acc + (parseFloat(f.val) || 0), 0);
+      const prevSumMm = activeFolds.reduce((acc, f) => acc + (parseFloat(f.prev) || 0), 0);
+      const deltaMm = +(sumMm - prevSumMm).toFixed(1);
+
+      const age = state.profile.age || 42;
+      const weight = state.inbodyDetails.weight || 60.7;
+
+      // Densidade corporal (Fórmula Feminina Pollock 3 ou 7 dobras)
+      const s3 = (parseFloat(state.skinfolds[0].val) || 0) + (parseFloat(state.skinfolds[1].val) || 0) + (parseFloat(state.skinfolds[2].val) || 0);
+      let bodyDensity = 1.0994921 - (0.0009929 * s3) + (0.0000023 * s3 * s3) - (0.0001392 * age);
+      if (state.skinfoldProtocol !== 'P3') {
+        const s7 = state.skinfolds.slice(0, 7).reduce((a, f) => a + (parseFloat(f.val) || 0), 0);
+        bodyDensity = 1.097 - (0.00046971 * s7) + (0.00000056 * s7 * s7) - (0.00012828 * age);
+      }
+      let bfPct = ((4.95 / bodyDensity) - 4.50) * 100;
+      bfPct = Math.max(8, Math.min(48, bfPct));
+      const fatKg = (weight * (bfPct / 100));
+      const leanKg = weight - fatKg;
+
+      // RCQ calculado das medidas de Cintura e Quadril
+      const waistVal = parseFloat(state.measurements.trunk.find(t => t.id === 'waist')?.cur) || 81.1;
+      const hipVal = parseFloat(state.measurements.trunk.find(t => t.id === 'hip')?.cur) || 92.2;
+      const rcq = (waistVal / hipVal).toFixed(2);
+
+      document.getElementById('calcSumMm').textContent = `${sumMm.toFixed(0)} mm`;
+      document.getElementById('calcDeltaMm').textContent = `${deltaMm > 0 ? '+' : ''}${deltaMm} mm vs ant.`;
+      document.getElementById('calcPollockBf').textContent = `${bfPct.toFixed(1)}%`;
+      document.getElementById('calcLeanKg').textContent = `${leanKg.toFixed(1)} kg`;
+      document.getElementById('calcRcqVal').textContent = rcq;
+
+      // Renderizar Inputs de Dobras Cutâneas com botão "3x Média"
+      const container = document.getElementById('skinfoldInputsContainer');
+      container.innerHTML = '';
+
+      activeFolds.forEach(f => {
+        const realIdx = state.skinfolds.findIndex(item => item.id === f.id);
+        const diff = +((parseFloat(f.val) || 0) - (parseFloat(f.prev) || 0)).toFixed(1);
+        const diffBadge = diff <= 0
+          ? `<span class="text-[10px] font-bold text-[#8FFF00] bg-[#8FFF00]/10 px-1.5 py-0.5 rounded">${diff} mm</span>`
+          : `<span class="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">+${diff} mm</span>`;
+
+        const row = document.createElement('div');
+        row.className = 'bg-[#0B0F17] border border-slate-800 rounded-xl p-2.5 space-y-2';
+        row.innerHTML = `
+          <div class="flex items-center justify-between gap-2">
+            <div class="min-w-0">
+              <div class="flex items-center gap-1.5">
+                <span class="font-bold text-xs text-white">${escapeHtml(f.name)}</span>
+                ${diffBadge}
+              </div>
+              <span class="block text-[10px] text-slate-400">${escapeHtml(f.dir)} • Ant: ${f.prev} mm</span>
+            </div>
+
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onclick="toggle3xPinch(${realIdx})"
+                class="px-2 py-1 rounded-lg text-[10px] font-bold border transition ${
+                  f.show3x
+                    ? 'bg-[#00E5FF]/20 text-[#00E5FF] border-[#00E5FF]/50'
+                    : 'bg-[#141C2B] text-slate-400 border-slate-700 hover:text-white'
+                }"
+              >
+                3x Média
+              </button>
+              <input
+                type="number"
+                step="0.5"
+                value="${f.val}"
+                oninput="updateSkinfoldVal(${realIdx}, this.value)"
+                class="w-16 bg-[#141C2B] border border-slate-700 focus:border-[#8FFF00] rounded-lg px-2 py-1 text-center font-rajdhani font-bold text-base text-[#8FFF00] focus:outline-none"
+              />
+              <span class="text-[10px] text-slate-400">mm</span>
+            </div>
+          </div>
+
+          ${
+            f.show3x
+              ? `
+            <div class="grid grid-cols-3 gap-2 pt-1.5 border-t border-slate-800/80 bg-[#141C2B]/60 p-2 rounded-lg">
+              <div>
+                <label class="block text-[9px] text-slate-400 uppercase font-bold mb-0.5">1ª Pinçada (mm)</label>
+                <input type="number" step="0.5" value="${f.p1}" oninput="updatePinch3x(${realIdx}, 'p1', this.value)" class="w-full bg-[#0B0F17] border border-slate-700 rounded px-2 py-1 text-xs text-center text-white font-bold" />
+              </div>
+              <div>
+                <label class="block text-[9px] text-slate-400 uppercase font-bold mb-0.5">2ª Pinçada (mm)</label>
+                <input type="number" step="0.5" value="${f.p2}" oninput="updatePinch3x(${realIdx}, 'p2', this.value)" class="w-full bg-[#0B0F17] border border-slate-700 rounded px-2 py-1 text-xs text-center text-white font-bold" />
+              </div>
+              <div>
+                <label class="block text-[9px] text-slate-400 uppercase font-bold mb-0.5">3ª Pinçada (mm)</label>
+                <input type="number" step="0.5" value="${f.p3}" oninput="updatePinch3x(${realIdx}, 'p3', this.value)" class="w-full bg-[#0B0F17] border border-slate-700 rounded px-2 py-1 text-xs text-center text-white font-bold" />
+              </div>
+            </div>
+          `
+              : ''
+          }
+        `;
+        container.appendChild(row);
+      });
+
+      renderSkinfoldChart();
+      renderMeasurementsSection();
+    }
+
+    function toggle3xPinch(idx) {
+      state.skinfolds[idx].show3x = !state.skinfolds[idx].show3x;
+      saveState();
+      renderSkinfoldsTab();
+    }
+
+    function updateSkinfoldVal(idx, val) {
+      state.skinfolds[idx].val = parseFloat(val) || 0;
+      // Atualiza último ponto do histórico de dobras em tempo real
+      const total7 = state.skinfolds.slice(0, 7).reduce((a, f) => a + (parseFloat(f.val) || 0), 0);
+      if (state.skinfoldHistory.length > 0) {
+        state.skinfoldHistory[state.skinfoldHistory.length - 1].sumMm = Math.round(total7);
+      }
+      saveState();
+      renderSkinfoldsTab();
+    }
+
+    function updatePinch3x(idx, pKey, val) {
+      const f = state.skinfolds[idx];
+      f[pKey] = parseFloat(val) || 0;
+      const mean = +(((parseFloat(f.p1) || 0) + (parseFloat(f.p2) || 0) + (parseFloat(f.p3) || 0)) / 3).toFixed(1);
+      f.val = mean;
+      saveState();
+      renderSkinfoldsTab();
+    }
+
+    function saveCurrentSkinfoldToHistory() {
+      const sum7 = Math.round(state.skinfolds.slice(0, 7).reduce((a, f) => a + (parseFloat(f.val) || 0), 0));
+      const waist = parseFloat(state.measurements.trunk.find(t => t.id === 'waist')?.cur) || 80.0;
+      state.skinfoldHistory.push({
+        date: 'Nova Aval.',
+        sumMm: sum7,
+        waistCm: waist
+      });
+      saveState();
+      renderSkinfoldChart();
+      showToast('Avaliação adicionada ao gráfico de Dobras & Medidas!');
+    }
+
+    function renderSkinfoldChart() {
+      const container = document.getElementById('skinfoldChartContainer');
+      const hist = state.skinfoldHistory;
+      if (!hist || hist.length === 0) return;
+
+      const maxMm = Math.max(...hist.map(h => h.sumMm), 140);
+
+      let cols = '';
+      hist.forEach(h => {
+        const hPct = Math.max(20, Math.round((h.sumMm / maxMm) * 100));
+        cols += `
+          <div class="flex flex-col items-center justify-end flex-1 bg-[#0B0F17] border border-slate-800 rounded-xl p-2.5">
+            <span class="text-xs font-rajdhani font-bold text-[#8FFF00] mb-1">${h.sumMm} mm</span>
+            <div class="w-full max-w-[44px] h-20 bg-[#141C2B] rounded-lg flex items-end p-1 border border-slate-800">
+              <div class="w-full bg-gradient-to-t from-[#00E5FF] to-[#8FFF00] rounded" style="height: ${hPct}%"></div>
+            </div>
+            <span class="text-[10px] font-bold text-white mt-1.5">${escapeHtml(h.date)}</span>
+            <span class="text-[9px] text-slate-400">Cintura: ${h.waistCm}cm</span>
+          </div>
+        `;
+      });
+
+      container.innerHTML = `<div class="flex items-stretch gap-2">${cols}</div>`;
+    }
+
+    function renderMeasurementsSection() {
+      const container = document.getElementById('MeasurementsContainer');
+      let html = `<div class="space-y-2">`;
+
+      // Tronco
+      state.measurements.trunk.forEach((m, idx) => {
+        const diff = +((parseFloat(m.cur) || 0) - (parseFloat(m.prev) || 0)).toFixed(1);
+        html += `
+          <div class="bg-[#0B0F17] border border-slate-800 rounded-xl p-2.5 flex items-center justify-between gap-2">
+            <div>
+              <span class="text-xs font-bold text-white">${escapeHtml(m.label)}</span>
+              <span class="block text-[10px] text-slate-400">Anterior: ${m.prev} cm (${diff > 0 ? '+' : ''}${diff} cm)</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <input
+                type="number"
+                step="0.1"
+                value="${m.cur}"
+                oninput="updateTrunkMeas(${idx}, this.value)"
+                class="w-16 bg-[#141C2B] border border-slate-700 focus:border-[#00E5FF] rounded-lg px-2 py-1 text-center font-rajdhani font-bold text-sm text-[#00E5FF]"
+              />
+              <span class="text-[10px] text-slate-400">cm</span>
+            </div>
+          </div>
+        `;
+      });
+
+      // Membros Bilaterais (Direito vs Esquerdo)
+      state.measurements.bilateral.forEach((b, idx) => {
+        const asym = Math.abs((parseFloat(b.right) || 0) - (parseFloat(b.left) || 0)).toFixed(1);
+        const hasAlert = parseFloat(asym) >= 1.5;
+
+        html += `
+          <div class="bg-[#0B0F17] border ${hasAlert ? 'border-amber-500/60' : 'border-slate-800'} rounded-xl p-2.5">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-xs font-bold text-white">${escapeHtml(b.label)} (Bilateral)</span>
+              ${
+                hasAlert
+                  ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">⚠️ Assimetria: ${asym} cm</span>`
+                  : `<span class="text-[10px] text-emerald-400 font-semibold">Simétrico (Δ ${asym} cm)</span>`
+              }
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div class="flex items-center justify-between bg-[#141C2B] rounded-lg px-2.5 py-1 border border-slate-800">
+                <span class="text-[10px] text-slate-400 font-bold">Direito:</span>
+                <input type="number" step="0.1" value="${b.right}" oninput="updateBilateralMeas(${idx}, 'right', this.value)" class="w-14 bg-transparent text-right font-bold text-xs text-white focus:outline-none" />
+              </div>
+              <div class="flex items-center justify-between bg-[#141C2B] rounded-lg px-2.5 py-1 border border-slate-800">
+                <span class="text-[10px] text-slate-400 font-bold">Esquerdo:</span>
+                <input type="number" step="0.1" value="${b.left}" oninput="updateBilateralMeas(${idx}, 'left', this.value)" class="w-14 bg-transparent text-right font-bold text-xs text-white focus:outline-none" />
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      html += `</div>`;
+      container.innerHTML = html;
+    }
+
+    function updateTrunkMeas(idx, val) {
+      state.measurements.trunk[idx].cur = parseFloat(val) || 0;
+      saveState();
+      renderSkinfoldsTab();
+    }
+
+    function updateBilateralMeas(idx, side, val) {
+      state.measurements.bilateral[idx][side] = parseFloat(val) || 0;
+      saveState();
+      renderMeasurementsSection();
+    }
+
+    // =========================================================================
+    // MÓDULO 4: CRONOGRAMA DE MICROCICLO (SEMANAL) E MESOCICLO (MENSAL)
+    // =========================================================================
+    function renderScheduleTab() {
+      const container = document.getElementById('scheduleWeeksList');
+      container.innerHTML = '';
+      const dayNames = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+      const weekTitles = {
+        1: 'Semana 1 — Microciclo Base / Adaptação',
+        2: 'Semana 2 — Microciclo de Progressão',
+        3: 'Semana 3 — Microciclo de Pico / Sobrecarga',
+        4: 'Semana 4 — Microciclo de Consolidação'
+      };
+
+      let totalSessions = 0;
+
+      for (let w = 1; w <= 4; w++) {
+        const wData = state.schedule[w];
+        const isCurrent = w === state.activeWeek;
+
+        let daysHtml = '';
+        wData.days.forEach((dVal, dIdx) => {
+          if (['A', 'B', 'C', 'D'].includes(dVal)) totalSessions++;
+          let badgeCls = 'bg-[#0B0F17] text-slate-500 border-slate-800';
+          if (dVal === 'A') badgeCls = 'bg-[#8FFF00]/20 text-[#8FFF00] border-[#8FFF00]/40 font-extrabold';
+          if (dVal === 'B') badgeCls = 'bg-[#00E5FF]/20 text-[#00E5FF] border-[#00E5FF]/40 font-extrabold';
+          if (dVal === 'C') badgeCls = 'bg-purple-500/20 text-purple-300 border-purple-500/40 font-extrabold';
+          if (dVal === 'D') badgeCls = 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-extrabold';
+          if (dVal === 'Cardio') badgeCls = 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 font-semibold';
+
+          daysHtml += `
+            <button
+              onclick="cycleScheduleDay(${w}, ${dIdx})"
+              class="py-2 px-1 rounded-xl border ${badgeCls} flex flex-col items-center justify-center active:scale-95 transition"
+            >
+              <span class="text-[9px] uppercase opacity-75">${dayNames[dIdx]}</span>
+              <span class="text-[11px] mt-0.5">${dVal}</span>
+            </button>
+          `;
+        });
+
+        const card = document.createElement('div');
+        card.className = `rounded-2xl p-3.5 border ${isCurrent ? 'bg-[#141C2B] border-[#8FFF00]/60' : 'bg-[#141C2B]/80 border-slate-800'}`;
+        card.innerHTML = `
+          <div class="flex items-center justify-between mb-2.5">
+            <span class="font-rajdhani font-bold text-sm text-white">${weekTitles[w]}</span>
+            ${isCurrent ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded bg-[#8FFF00] text-slate-950">Ativa</span>' : ''}
+          </div>
+          <div class="grid grid-cols-7 gap-1.5 mb-2.5">
+            ${daysHtml}
+          </div>
+          <div class="flex items-center justify-between pt-2 border-t border-slate-800 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="text-slate-400 text-[11px]">Peso na Semana (kg):</span>
+              <input
+                type="number"
+                step="0.1"
+                value="${wData.weight}"
+                placeholder="60.7"
+                oninput="updateScheduleWeight(${w}, this.value)"
+                class="w-16 bg-[#0B0F17] border border-slate-800 rounded-lg px-2 py-1 text-center font-bold text-white"
+              />
+            </div>
+            <button onclick="selectWeek(${w}); switchMainTab('treinos');" class="text-[11px] font-bold text-[#8FFF00] hover:underline">
+              Ver cargas da Sem ${w} &rarr;
+            </button>
+          </div>
+        `;
+        container.appendChild(card);
+      }
+
+      document.getElementById('scheduleAdherenceBadge').textContent = `${totalSessions} Treinos no Mês`;
+    }
+
+    function cycleScheduleDay(w, dIdx) {
+      const order = ['A', 'B', 'C', 'D', 'Cardio', 'Desc'];
+      const cur = state.schedule[w].days[dIdx];
+      state.schedule[w].days[dIdx] = order[(order.indexOf(cur) + 1) % order.length];
+      saveState();
+      renderScheduleTab();
+    }
+
+    function updateScheduleWeight(w, val) {
+      state.schedule[w].weight = val;
+      saveState();
+    }
+
+    // ==================== NAVEGAÇÃO DE SEMANAS E TREINOS ====================
+    function selectWeek(w) {
+      state.activeWeek = w;
+      saveState();
+      renderWorkoutTab();
+      renderScheduleTab();
+      refreshIcons();
+    }
+
+    function selectWorkoutSplit(sp) {
+      state.activeSplit = sp;
+      saveState();
+      renderWorkoutTab();
+      refreshIcons();
+    }
+
+    function changeMesocycle(val) {
+      state.mesocycle = val;
+      saveState();
+      showToast(val);
+    }
+
+    function updateWorkoutDate(val) {
+      state.workoutDate = val;
+      saveState();
+    }
+
+    function saveWorkoutSessionNote(val) {
+      state.sessionNotes[`${state.activeWeek}_${state.activeSplit}`] = val;
+      saveState();
+    }
+
+    // ==================== EXPORTAÇÃO WHATSAPP ====================
+    function openWhatsAppModal(mode) {
+      document.getElementById('waPhoneInput').value = state.waPhone || '';
+      const wk = state.activeWeek;
+      const sp = state.activeSplit;
+      const exList = state.workouts[sp] || [];
+
+      let lines = [];
+      lines.push(`⚡ *PERSONALHUB — RELATÓRIO DE TREINO & EVOLUÇÃO*`);
+      lines.push(`👤 *Aluna:* ${state.profile.name} (${state.profile.heightCm}cm | ${state.profile.age} anos)`);
+      lines.push(`📅 *Período:* ${state.mesocycle} — *Semana ${wk}*`);
+      lines.push(`--------------------------------`);
+      lines.push(`🏋️‍♀️ *CARGAS DO TREINO ${sp} (HOJE):*`);
+
+      exList.forEach(ex => {
+        const cur = ex.weeks[wk] || {};
+        const w1 = parseFloat(ex.weeks[1]?.load);
+        const cLoad = parseFloat(cur.load);
+        let gainStr = '';
+        if (!isNaN(w1) && !isNaN(cLoad) && cLoad > w1) {
+          gainStr = ` *(+${+(cLoad - w1).toFixed(1)}kg no mês 🚀)*`;
+        }
+        lines.push(`${cur.done ? '✅' : '▫️'} *${ex.name}*: ${cur.load !== '' ? cur.load + ' kg' : '—'} ${cur.reps ? `x ${cur.reps} reps` : ''} (${cur.effort || 'RIR 1'})${gainStr}`);
+      });
+
+      const note = state.sessionNotes[`${wk}_${sp}`];
+      if (note) {
+        lines.push(`💬 *Obs do Treino:* "${note}"`);
+      }
+
+      if (mode === 'full') {
+        const lastInbody = state.inbodyHistory[state.inbodyHistory.length - 1];
+        const firstInbody = state.inbodyHistory[0];
+        lines.push(`--------------------------------`);
+        lines.push(`📊 *RESUMO INBODY 770 (${lastInbody.date}):*`);
+        lines.push(`• *Pontuação InBody:* ${state.inbodyDetails.score}/100 Pontos`);
+        lines.push(`• *Peso:* ${lastInbody.weight} kg (Início: ${firstInbody.weight} kg)`);
+        lines.push(`• *Massa Muscular (MME):* ${lastInbody.smm} kg`);
+        lines.push(`• *PGC (% Gordura):* ${lastInbody.pgc}% | *Taxa AEC:* ${lastInbody.aec}`);
+        lines.push(`• *Gordura Visceral:* Nível ${state.inbodyDetails.visceralLevel} (${state.inbodyDetails.visceralArea} cm²)`);
+      }
+
+      document.getElementById('waTextPreview').value = lines.join('\n');
+      const modal = document.getElementById('whatsAppModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      refreshIcons();
+    }
+
+    function closeWhatsAppModal() {
+      const modal = document.getElementById('whatsAppModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function saveWaPhone(val) {
+      state.waPhone = val.replace(/\D/g, '');
+      saveState();
+    }
+
+    function copyWaText() {
+      const el = document.getElementById('waTextPreview');
+      el.select();
+      el.setSelectionRange(0, 99999);
+      document.execCommand('copy');
+      showToast('Relatório copiado para a área de transferência!');
+    }
+
+    function openWaLink() {
+      const text = encodeURIComponent(document.getElementById('waTextPreview').value);
+      const phone = (state.waPhone || '').replace(/\D/g, '');
+      const url = phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
+      window.open(url, '_blank');
+    }
+
+    // ==================== MODAIS DE EXERCÍCIO E PERFIL ====================
+    function openAddExerciseModal() {
+      document.getElementById('newExNameInput').value = '';
+      document.getElementById('newExLoadInput').value = '';
+      document.getElementById('newExRepsInput').value = '';
+      const m = document.getElementById('addExerciseModal');
+      m.classList.remove('hidden');
+      m.classList.add('flex');
+    }
+
+    function closeAddExerciseModal() {
+      const m = document.getElementById('addExerciseModal');
+      m.classList.add('hidden');
+      m.classList.remove('flex');
+    }
+
+    function confirmAddExercise() {
+      const name = document.getElementById('newExNameInput').value.trim();
+      if (!name) {
+        showToast('Informe o nome do exercício!');
+        return;
+      }
+      const target = document.getElementById('newExTargetInput').value.trim() || '4x 10 reps';
+      const rir = document.getElementById('newExRirInput').value.trim() || 'RIR 1-2';
+      const load = document.getElementById('newExLoadInput').value.trim();
+      const reps = document.getElementById('newExRepsInput').value.trim();
+
+      const sp = state.activeSplit;
+      const num = state.workouts[sp].length + 1;
+      const newEx = {
+        id: 'ex_' + Date.now(),
+        name: `${num}. ${name}`,
+        target,
+        rir,
+        weeks: {
+          1: { load: '', reps: '', effort: 'RIR 1', note: '', done: false },
+          2: { load: '', reps: '', effort: 'RIR 1', note: '', done: false },
+          3: { load: '', reps: '', effort: 'RIR 1', note: '', done: false },
+          4: { load: '', reps: '', effort: 'RIR 1', note: '', done: false }
+        }
+      };
+
+      if (load !== '') {
+        newEx.weeks[state.activeWeek].load = parseFloat(load);
+        newEx.weeks[state.activeWeek].reps = parseInt(reps, 10) || 10;
+        newEx.weeks[state.activeWeek].done = true;
+      }
+
+      state.workouts[sp].push(newEx);
+      saveState();
+      closeAddExerciseModal();
+      renderWorkoutTab();
+      refreshIcons();
+      showToast('Exercício adicionado com sucesso!');
+    }
+
+    function openProfileModal() {
+      document.getElementById('profNameInput').value = state.profile.name;
+      document.getElementById('profHeightInput').value = state.profile.heightCm;
+      document.getElementById('profAgeInput').value = state.profile.age;
+      document.getElementById('profSexInput').value = state.profile.sex;
+      const m = document.getElementById('profileModal');
+      m.classList.remove('hidden');
+      m.classList.add('flex');
+    }
+
+    function closeProfileModal() {
+      const m = document.getElementById('profileModal');
+      m.classList.add('hidden');
+      m.classList.remove('flex');
+    }
+
+    function saveProfileModal() {
+      state.profile.name = document.getElementById('profNameInput').value.trim() || 'Gabriela Lima';
+      state.profile.heightCm = parseInt(document.getElementById('profHeightInput').value, 10) || 166;
+      state.profile.age = parseInt(document.getElementById('profAgeInput').value, 10) || 42;
+      state.profile.sex = document.getElementById('profSexInput').value;
+      saveState();
+      closeProfileModal();
+      renderApp();
+      showToast('Dados da aluna atualizados!');
+    }
+
+    function resetAllDemoData() {
+      localStorage.removeItem(effectiveStorageKey);
+      state = getInitialState();
+      saveState();
+      renderApp();
+      showToast('Dados originais do InBody 770 e Treinos restaurados!');
+    }
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      renderApp();
+    });
+  </script>
+</body>
+</html>

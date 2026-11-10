@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PersonalHUB — Plataforma para Personal Trainers e Alunos</title>
+<meta name="description" content="A plataforma completa onde Personal Trainers gerenciam seus clientes, exportam e importam treinos, e alunos contam com scanner de calorias por câmera e acompanhamento diário.">
+<meta name="theme-color" content="#0E1113">
+<link rel="icon" href="icons/icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{--gold:#8FFF00;--yel:#B6FF3C;--bg:#0E1113;--card:#181F24;--mut:#9AA6B2;--line:rgba(143,255,0,.25);--grad:linear-gradient(135deg,#B6FF3C,#72DF00)}
+*{box-sizing:border-box;margin:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:#F5F7F8;font-family:Inter,system-ui,sans-serif;line-height:1.6}
+h1,h2,h3{font-family:Rajdhani,sans-serif;text-transform:uppercase;letter-spacing:.5px;line-height:1.1}
+.wrap{max-width:1060px;margin:0 auto;padding:0 20px}
+nav{position:sticky;top:0;z-index:10;background:rgba(14,17,19,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;height:64px}
+.brand-nav{display:flex;align-items:center;gap:10px;text-decoration:none}
+.brand-nav img{width:40px;height:40px;border-radius:10px;background:#fff;border:1.5px solid var(--gold)}
+.brand-nav b{font:700 1.55rem Rajdhani;color:#fff;letter-spacing:1.5px}
+.brand-nav b span{color:var(--gold)}
+nav a.l{color:var(--mut);text-decoration:none;margin-left:18px;font-size:.92rem}
+nav a.l:hover{color:var(--gold)}
+.btn{display:inline-block;background:var(--grad);color:#0b0f0c;font-weight:700;padding:14px 26px;border-radius:12px;text-decoration:none;box-shadow:0 0 22px rgba(143,255,0,.4);transition:.2s}
+.btn:hover{transform:translateY(-2px);box-shadow:0 0 32px rgba(182,255,60,.6)}
+.btn.o{background:none;color:var(--gold);border:1px solid var(--gold);box-shadow:none}
+.hero{text-align:center;padding:56px 0 70px;background:radial-gradient(circle at 50% 0,#1d3306,var(--bg) 62%)}
+.hero img{width:140px;height:140px;object-fit:contain;background:#fff;padding:8px;border-radius:28px;border:2px solid var(--gold);box-shadow:0 0 50px rgba(143,255,0,.3)}
+.hero h1{font-size:clamp(2.1rem,6vw,3.7rem);margin:24px 0 12px}
+.hero h1 span,.gold{color:var(--gold)}
+.hero p{color:var(--mut);max-width:670px;margin:0 auto 26px;font-size:1.1rem}
+.row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+section{padding:60px 0}
+.t{text-align:center;margin-bottom:34px}
+.t h2{font-size:clamp(1.7rem,4vw,2.4rem)}
+.t p{color:var(--mut);margin-top:8px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;transition:.2s}
+.card:hover{border-color:var(--gold);transform:translateY(-3px)}
+.card .i{font-size:2rem;margin-bottom:8px}
+.card h3{font-size:1.25rem;color:var(--gold);margin-bottom:6px}
+.card p{color:var(--mut);font-size:.95rem}
+.alt{background:#121619;border-block:1px solid var(--line)}
+.two{display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.two ul{list-style:none;padding:0}
+.two li{padding:8px 0 8px 28px;position:relative;color:#dde3e8}
+.two li::before{content:"✔";position:absolute;left:0;color:var(--gold);font-weight:700}
+.steps{counter-reset:s}
+.step{position:relative;padding-top:54px}
+.step::before{counter-increment:s;content:counter(s);position:absolute;top:0;left:22px;width:38px;height:38px;border-radius:50%;background:var(--grad);color:#0b0f0c;display:grid;place-items:center;font:700 1.3rem Rajdhani}
+.phone{max-width:270px;margin:0 auto;border:3px solid var(--gold);border-radius:32px;padding:18px 14px;background:#0b0e10;box-shadow:0 0 40px rgba(143,255,0,.2)}
+.phone .b{background:#161c20;border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:8px;font-size:.85rem}
+.phone .ring{width:90px;height:90px;border-radius:50%;margin:8px auto;border:4px solid #1f2d3d;border-top-color:#8FFF00;border-right-color:#8FFF00;display:grid;place-items:center;font:700 1.3rem Rajdhani}
+.cta{text-align:center;background:radial-gradient(circle at 50% 100%,#1d3306,var(--bg) 70%)}
+.cta h2{font-size:clamp(1.8rem,5vw,2.8rem);margin-bottom:12px}
+footer{padding:26px 0;text-align:center;color:var(--mut);font-size:.85rem;border-top:1px solid var(--line)}
+@media(max-width:640px){nav a.l{display:none}}
+</style>
+</head>
+<body>
+<nav><div class="wrap">
+  <a class="brand-nav" href="index.html"><img src="logo.jpg" alt="PersonalHUB"><b>Personal<span>HUB</span></b></a>
+  <div><a class="l" href="#recursos">Recursos</a><a class="l" href="#perfis">Para quem é</a><a class="l" href="#instalar">Instalar</a> <a class="btn" style="padding:8px 18px;margin-left:14px" href="index.html">Entrar</a></div>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <img src="logo.jpg" alt="PersonalHUB">
+  <h1>Personal<span>HUB</span> — Treino, Gestão e <span>Resultado.</span></h1>
+  <p>A plataforma completa onde Personal Trainers gerenciam seus clientes com autonomia, importam e exportam fichas de treino, e os alunos contam com scanner de calorias por câmera, calculadora instantânea de alimentos e acompanhamento diário.</p>
+  <div class="row"><a class="btn" href="index.html">Acessar o aplicativo</a><a class="btn o" href="#recursos">Conhecer os recursos</a></div>
+</div></header>
+
+<section id="recursos"><div class="wrap">
+  <div class="t"><h2>Tecnologia e praticidade <span class="gold">num só lugar</span></h2><p>Feito para elevar o padrão do atendimento de cada Personal Trainer e acelerar a evolução de cada aluno.</p></div>
+  <div class="grid">
+    <div class="card"><div class="i">💰</div><h3>Financeiro & Inadimplência</h3><p>Controle completo de mensalidades pagas, datas a vencer, inadimplentes, reajustes (% ou R$) e cobrança com 1 clique via WhatsApp ou no app.</p></div>
+    <div class="card"><div class="i">👨‍🏫</div><h3>Professor como Mini CEO</h3><p>Cada professor tem autonomia de Mini CEO: cadastra seus próprios alunos, monta fichas e gerencia sua aba exclusiva de Financeiro.</p></div>
+    <div class="card"><div class="i">📸</div><h3>Calorias pela câmera</h3><p>Botão "Saiba quanto de caloria está comendo agora": aponte a câmera do celular para o prato e receba a estimativa automática de calorias e macros.</p></div>
+    <div class="card"><div class="i">⚡</div><h3>Cálculo ao digitar</h3><p>Escreva o nome do alimento (ex.: amendoim) e o aplicativo calcula sozinho, na mesma hora, calorias, proteínas, carboidratos e gorduras.</p></div>
+    <div class="card"><div class="i">📄</div><h3>Exportar & Importar treino</h3><p>Exporte fichas de treino em documento (.json, .txt ou PDF para impressão) e importe treinos prontos em segundos.</p></div>
+    <div class="card"><div class="i">👨‍🏫</div><h3>Multi-Personal Trainer</h3><p>Cada professor tem seu login individual para cadastrar e acompanhar seus clientes, enquanto o CEO administra toda a plataforma.</p></div>
+    <div class="card"><div class="i">🏋️</div><h3>Treinos sob medida</h3><p>Séries, repetições, cargas, tempo de descanso, biblioteca de exercícios e links de vídeo, com aviso imediato quando o treino é atualizado.</p></div>
+    <div class="card"><div class="i">💧</div><h3>Meta diária de água</h3><p>Cálculo automático pelo peso corporal (35 ml/kg), registro rápido de consumo e gráfico semanal de hidratação.</p></div>
+    <div class="card"><div class="i">⏱️</div><h3>Cronômetro de cárdio</h3><p>Modo livre ou intervalado (HIIT), alerta sonoro, vibração e estimativa automática de calorias gastas.</p></div>
+    <div class="card"><div class="i">💪</div><h3>Comunidade positiva</h3><p>Feed que conecta todos os alunos para postar fotos e conquistas, com reação exclusiva de força (💪) e sem comentários indesejados.</p></div>
+    <div class="card"><div class="i">🤖</div><h3>Chat automático de exercícios</h3><p>Bolinha flutuante inteligente: o aluno pergunta "Que exercício é esse?" e recebe na hora a explicação e o link direto do vídeo no YouTube.</p></div>
+    <div class="card"><div class="i">📋</div><h3>Treino Automático por Relatório</h3><p>Para quem não pode pagar um personal: o aluno responde o Relatório de Objetivos (nível, lesões, fraturas, altura, peso e metas) e o app monta o treino sozinho.</p></div>
+    <div class="card"><div class="i">💬</div><h3>Check-in e contato rápido</h3><p>Perguntas interativas diárias, sequência de dias treinados (streak 🔥) e botão direto para o WhatsApp opcional do aluno.</p></div>
+  </div>
+</div></section>
+
+<section class="alt" id="perfis"><div class="wrap">
+  <div class="t"><h2>Três níveis de acesso <span class="gold">integrados</span></h2></div>
+  <div class="two">
+    <div class="card"><h3 style="font-size:1.5rem">👑 CEO (Admin Geral)</h3><ul>
+      <li>Controle total de toda a plataforma</li>
+      <li>Aba Financeiro com controle dos Professores (Mini CEOs) que já pagaram ou irão pagar</li>
+      <li>Controle financeiro dos Alunos Sem Personal que pagam a mensalidade direto ao CEO</li>
+      <li>Reajustes de mensalidades em lote (% ou R$) ou individuais</li>
+      <li>Cadastra, ativa/desativa e gerencia todos os professores e alunos</li>
+    </ul></div>
+    <div class="card"><h3 style="font-size:1.5rem">🏋️ Professor · Mini CEO</h3><ul>
+      <li>Painel próprio de Mini CEO com seus alunos e indicadores</li>
+      <li>Aba Financeiro própria: vê alunos que já pagaram, faltam pagar, datas a vencer e inadimplências</li>
+      <li>Faz reajustes de mensalidades, dá baixa em pagamentos e cobra no WhatsApp/App</li>
+      <li>Cadastra clientes com login, senha, mensalidade e vencimento</li>
+      <li>Monta, duplica, importa e exporta treinos via documento</li>
+    </ul></div>
+    <div class="card"><h3 style="font-size:1.5rem">🏃 Aluno (Cliente)</h3><ul>
+      <li>Acesso individual ao treino do dia e histórico</li>
+      <li>Scanner de refeição por câmera + calculadora instantânea</li>
+      <li>Meta de água animada, cronômetro de cárdio e medalhas</li>
+      <li>Funciona no navegador do computador, celular e tablet</li>
+    </ul></div>
+  </div>
+</div></section>
+
+<section id="instalar"><div class="wrap">
+  <div class="t"><h2>Instale no <span class="gold">celular ou computador</span></h2><p>Web App instalável (PWA): funciona direto no Chrome, Safari e Edge sem precisar de loja.</p></div>
+  <div class="two" style="align-items:center">
+    <div class="phone"><div class="b"><b class="gold">Bom dia, Maria! 💪</b><br><span style="color:var(--mut)">📸 Saiba quanto de caloria está comendo agora</span></div><div class="ring">100%</div><div style="text-align:center;font-size:.8rem;color:var(--mut)">PersonalHUB · Meta diária 💧</div><div class="b" style="margin-top:8px">⚡ Amendoim (30g) → 170 kcal</div></div>
+    <div><div class="card" style="margin-bottom:12px"><h3>Android (Chrome)</h3><p>Toque no menu ⋮ e selecione "Instalar aplicativo".</p></div>
+    <div class="card" style="margin-bottom:12px"><h3>iPhone (Safari)</h3><p>Toque em Compartilhar e em "Adicionar à Tela de Início".</p></div>
+    <div class="card"><h3>Computador (Chrome / Edge)</h3><p>Clique no ícone de instalação na barra de endereço do navegador.</p></div></div>
+  </div>
+</div></section>
+
+<section class="cta"><div class="wrap">
+  <h2>Pronto para <span class="gold">começar?</span></h2>
+  <p style="color:var(--mut);margin-bottom:24px">Entre agora no PersonalHUB como CEO, Personal Trainer ou Aluno.</p>
+  <a class="btn" href="index.html">Acessar o PersonalHUB</a>
+</div></section>
+
+<footer>© <script>document.write(new Date().getFullYear())</script> PersonalHUB. Todos os direitos reservados.<br>As informações e estimativas nutricionais são educativas e não substituem um nutricionista.</footer>
+</body>
+</html>

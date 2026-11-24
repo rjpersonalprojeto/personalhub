@@ -1,244 +1,776 @@
-/* Camada de nuvem PersonalHUB (Supabase): autenticação + sincronização automática.
-   O app trabalha com o objeto DB em memória; save() agenda um "flush" que envia
-   ao banco só as linhas que mudaram. As regras RLS decidem o que cada perfil acessa. */
+/* Camada de nuvem PersonalHUB (Supabase REST + Realtime + Polling):
+   Sincronização automática multi-celular compatível com TODAS as redes (4G, 5G, Wi-Fi),
+   SEM necessidade de Edge Functions ou CLI. Basta rodar supabase/schema.sql (1 tabela). */
 const Cloud = (() => {
+  const TABLE = 'personalhub_sync';
+  const ALL_IDS = ['users', 'workouts', 'settings', 'activity', 'content'];
   const cfg = window.APP_CONFIG || window.RJOTA_CONFIG || {};
-  let curUrl = (cfg.SUPABASE_URL || localStorage.getItem('personalhub_supabase_url') || '').trim();
-  let curKey = (cfg.SUPABASE_ANON_KEY || localStorage.getItem('personalhub_supabase_key') || '').trim();
-  let enabled = !!(curUrl && curKey && window.supabase);
-  let sb, snap = {}, timer, busy = false, dirty = false;
-  let realtimeChannelSub = null;
 
-  function setupCloudRealtime() {
-    if (!sb || !enabled) return;
+  function deriveUrlFromJwt(key) {
     try {
-      if (realtimeChannelSub) sb.removeChannel(realtimeChannelSub);
-      realtimeChannelSub = sb.channel('personalhub-cloud-realtime')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'workouts' }, payload => {
-          if (typeof handleRealtimeSync === 'function') handleRealtimeSync({ type: 'cloud_workouts_change', payload });
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, payload => {
-          if (typeof handleRealtimeSync === 'function') handleRealtimeSync({ type: 'cloud_profiles_change', payload });
-        })
-        .subscribe();
-    } catch (e) {
-      console.warn('Supabase Realtime fallback:', e);
+      const parts = String(key || '').split('.');
+      if (parts.length !== 3) return '';
+      const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const json = JSON.parse(atob(b64));
+      if (json && json.iss === 'supabase' && json.ref) {
+        return `https://${json.ref}.supabase.co`;
+      }
+    } catch { }
+    return '';
+  }
+
+  function cleanUrl(u) {
+    return String(u || '').trim().replace(/\/+$/, '');
+  }
+
+  let curKey = String(cfg.SUPABASE_ANON_KEY || localStorage.getItem('personalhub_supabase_key') || '').trim();
+  let curUrl = cleanUrl(cfg.SUPABASE_URL || localStorage.getItem('personalhub_supabase_url') || '');
+  if (!curUrl && curKey) curUrl = deriveUrlFromJwt(curKey);
+
+  let enabled = !!(curUrl && curKey && /^https?:\/\//i.test(curUrl));
+  let sb = null;
+  let realtimeChannelSub = null;
+  let pollTimer = null;
+  let queueTimer = null;
+  let busy = false;
+  let pendingPush = false;
+  let pendingForceAll = false;
+  let lastSyncAt = 0;
+  let lastSyncError = null;
+  let remoteMeta = {}; // { [rowId]: updated_at_string }
+  let snap = {};       // { [rowId]: jsonString }
+  let workoutKeySnap = new Map();
+  let settingsKeySnap = new Map();
+  let dirtyUserIds = new Set();
+  let dirtyWorkoutKeys = new Set();
+  let dirtySettingsKeys = new Set();
+  let activePushPromise = null;
+
+  function ensureMetaFields() {
+    if (typeof DB === 'undefined' || !DB) return;
+    if (!DB.__deleted || typeof DB.__deleted !== 'object') DB.__deleted = { users: {}, activity: {}, content: {} };
+    if (!DB.__deleted.users) DB.__deleted.users = {};
+    if (!DB.__deleted.activity) DB.__deleted.activity = {};
+    if (!DB.__deleted.content) DB.__deleted.content = {};
+    if (!DB.__workoutTs || typeof DB.__workoutTs !== 'object') DB.__workoutTs = {};
+    if (!DB.__settingsTs || typeof DB.__settingsTs !== 'object') DB.__settingsTs = {};
+    if (!DB.workouts || typeof DB.workouts !== 'object') DB.workouts = {};
+    if (!DB.settings || typeof DB.settings !== 'object') DB.settings = {};
+    if (!Array.isArray(DB.users)) DB.users = [];
+    ['templates', 'checkins', 'water', 'logs', 'cardio', 'weights', 'posts', 'messages', 'tips', 'foods'].forEach(k => {
+      if (!Array.isArray(DB[k])) DB[k] = [];
+    });
+  }
+
+  function emptyDB() {
+    return {
+      users: [],
+      workouts: {},
+      templates: [],
+      checkins: [],
+      water: [],
+      logs: [],
+      cardio: [],
+      weights: [],
+      posts: [],
+      messages: [],
+      tips: [],
+      foods: [],
+      settings: {},
+      __deleted: { users: {}, activity: {}, content: {} },
+      __workoutTs: {},
+      __settingsTs: {},
+    };
+  }
+
+  function packRow(id) {
+    ensureMetaFields();
+    if (id === 'users') {
+      return { items: DB.users || [], deleted: DB.__deleted.users || {} };
     }
+    if (id === 'workouts') {
+      return { map: DB.workouts || {}, ts: DB.__workoutTs || {} };
+    }
+    if (id === 'settings') {
+      return { map: DB.settings || {}, ts: DB.__settingsTs || {} };
+    }
+    if (id === 'activity') {
+      return {
+        checkins: DB.checkins || [],
+        water: DB.water || [],
+        logs: DB.logs || [],
+        cardio: DB.cardio || [],
+        weights: DB.weights || [],
+        messages: DB.messages || [],
+        deleted: DB.__deleted.activity || {},
+      };
+    }
+    if (id === 'content') {
+      return {
+        posts: DB.posts || [],
+        templates: DB.templates || [],
+        foods: DB.foods || [],
+        tips: DB.tips || [],
+        deleted: DB.__deleted.content || {},
+      };
+    }
+    return {};
+  }
+
+  function mergeDeletedMaps(a = {}, b = {}) {
+    const out = { ...(a || {}) };
+    Object.entries(b || {}).forEach(([k, v]) => {
+      const ts = Number(v) || 0;
+      if (!out[k] || ts > Number(out[k])) out[k] = ts;
+    });
+    return out;
+  }
+
+  function mergeArrayById(remoteArr = [], localArr = [], mergedDel = {}, opts = {}) {
+    const byId = new Map();
+    const byEmail = new Map();
+    const dedupeEmail = !!opts.dedupeEmail;
+    const priorityLocalIds = opts.priorityLocalIds || null;
+
+    const consider = (item, isLocal) => {
+      if (!item || typeof item !== 'object') return;
+      const itemId = item.id;
+      if (!itemId) return;
+      const delTs = Number(mergedDel[itemId] || 0);
+      const itemTs = Number(item.updatedAt || item.createdAt || 0);
+      if (delTs && delTs >= itemTs) return;
+
+      const em = dedupeEmail && item.email ? String(item.email).trim().toLowerCase() : '';
+      const existing = byId.get(itemId) || (em ? byEmail.get(em) : null);
+
+      if (!existing) {
+        const copy = { ...item };
+        byId.set(copy.id, copy);
+        if (em) byEmail.set(em, copy);
+        return;
+      }
+
+      const exTs = Number(existing.updatedAt || existing.createdAt || 0);
+      const localForced = isLocal && priorityLocalIds && priorityLocalIds.has(itemId);
+      const shouldReplace = localForced || itemTs > exTs || (itemTs === exTs && !isLocal);
+
+      if (shouldReplace) {
+        const merged = { ...existing, ...item };
+        if (!merged.plainPw && existing.plainPw) merged.plainPw = existing.plainPw;
+        if (!merged.hash && existing.hash) { merged.hash = existing.hash; merged.salt = existing.salt; }
+        byId.delete(existing.id);
+        byId.set(merged.id, merged);
+        if (em) byEmail.set(em, merged);
+      } else {
+        if (!existing.plainPw && item.plainPw) existing.plainPw = item.plainPw;
+      }
+    };
+
+    (Array.isArray(remoteArr) ? remoteArr : []).forEach(x => consider(x, false));
+    (Array.isArray(localArr) ? localArr : []).forEach(x => consider(x, true));
+    return [...byId.values()];
+  }
+
+  function mergeKeyedMap(remoteMap = {}, remoteTs = {}, localMap = {}, localTs = {}, dirtyKeys = new Set(), deletedUsers = {}) {
+    const outMap = {};
+    const outTs = {};
+    const allKeys = new Set([...Object.keys(remoteMap || {}), ...Object.keys(localMap || {})]);
+
+    allKeys.forEach(k => {
+      const rTs = Number(remoteTs?.[k] || 0);
+      const lTs = Number(localTs?.[k] || 0);
+      const delTs = Number(deletedUsers?.[k] || 0);
+      if (delTs && delTs >= Math.max(rTs, lTs)) return;
+
+      const hasR = Object.prototype.hasOwnProperty.call(remoteMap || {}, k);
+      const hasL = Object.prototype.hasOwnProperty.call(localMap || {}, k);
+
+      if (hasL && (!hasR || dirtyKeys.has(k) || lTs > rTs)) {
+        outMap[k] = localMap[k];
+        outTs[k] = Math.max(lTs, rTs, dirtyKeys.has(k) ? Date.now() : 0);
+      } else if (hasR) {
+        outMap[k] = remoteMap[k];
+        outTs[k] = rTs;
+      }
+    });
+
+    return { map: outMap, ts: outTs };
+  }
+
+  function applyMergedRow(id, remoteData, preferRemote = false) {
+    ensureMetaFields();
+    if (!remoteData || typeof remoteData !== 'object') return;
+
+    if (id === 'users') {
+      const mergedDel = mergeDeletedMaps(remoteData.deleted, DB.__deleted.users);
+      DB.__deleted.users = mergedDel;
+      const localItems = preferRemote && !dirtyUserIds.size ? [] : (DB.users || []);
+      DB.users = mergeArrayById(remoteData.items || [], localItems, mergedDel, {
+        dedupeEmail: true,
+        priorityLocalIds: dirtyUserIds,
+      });
+      return;
+    }
+
+    if (id === 'workouts') {
+      const merged = mergeKeyedMap(
+        remoteData.map || {},
+        remoteData.ts || {},
+        preferRemote && !dirtyWorkoutKeys.size ? {} : (DB.workouts || {}),
+        DB.__workoutTs || {},
+        dirtyWorkoutKeys,
+        DB.__deleted.users
+      );
+      DB.workouts = merged.map;
+      DB.__workoutTs = merged.ts;
+      return;
+    }
+
+    if (id === 'settings') {
+      const merged = mergeKeyedMap(
+        remoteData.map || {},
+        remoteData.ts || {},
+        preferRemote && !dirtySettingsKeys.size ? {} : (DB.settings || {}),
+        DB.__settingsTs || {},
+        dirtySettingsKeys,
+        DB.__deleted.users
+      );
+      DB.settings = merged.map;
+      DB.__settingsTs = merged.ts;
+      return;
+    }
+
+    if (id === 'activity') {
+      const mergedDel = mergeDeletedMaps(remoteData.deleted, DB.__deleted.activity);
+      DB.__deleted.activity = mergedDel;
+      ['checkins', 'water', 'logs', 'cardio', 'weights', 'messages'].forEach(k => {
+        DB[k] = mergeArrayById(remoteData[k] || [], DB[k] || [], mergedDel);
+      });
+      return;
+    }
+
+    if (id === 'content') {
+      const mergedDel = mergeDeletedMaps(remoteData.deleted, DB.__deleted.content);
+      DB.__deleted.content = mergedDel;
+      ['posts', 'templates', 'foods', 'tips'].forEach(k => {
+        DB[k] = mergeArrayById(remoteData[k] || [], DB[k] || [], mergedDel);
+      });
+    }
+  }
+
+  function detectKeyChanges() {
+    ensureMetaFields();
+    const now = Date.now();
+    // Detecta alterações por aluno em workouts
+    const wKeys = new Set([...workoutKeySnap.keys(), ...Object.keys(DB.workouts || {})]);
+    wKeys.forEach(k => {
+      const curStr = JSON.stringify(DB.workouts[k] ?? null);
+      if (workoutKeySnap.get(k) !== curStr) {
+        dirtyWorkoutKeys.add(k);
+        DB.__workoutTs[k] = now;
+      }
+    });
+    // Detecta alterações por usuário em settings
+    const sKeys = new Set([...settingsKeySnap.keys(), ...Object.keys(DB.settings || {})]);
+    sKeys.forEach(k => {
+      const curStr = JSON.stringify(DB.settings[k] ?? null);
+      if (settingsKeySnap.get(k) !== curStr) {
+        dirtySettingsKeys.add(k);
+        DB.__settingsTs[k] = now;
+      }
+    });
+  }
+
+  function takeSnapshot(ids = ALL_IDS) {
+    ensureMetaFields();
+    ids.forEach(id => {
+      snap[id] = JSON.stringify(packRow(id));
+      if (id === 'workouts') {
+        workoutKeySnap = new Map(Object.entries(DB.workouts || {}).map(([k, v]) => [k, JSON.stringify(v ?? null)]));
+        dirtyWorkoutKeys.clear();
+      }
+      if (id === 'settings') {
+        settingsKeySnap = new Map(Object.entries(DB.settings || {}).map(([k, v]) => [k, JSON.stringify(v ?? null)]));
+        dirtySettingsKeys.clear();
+      }
+      if (id === 'users') {
+        dirtyUserIds.clear();
+      }
+    });
+  }
+
+  function saveLocalCacheSilently() {
+    if (typeof DB === 'undefined' || !DB) return;
+    try {
+      const keyName = typeof KEY !== 'undefined' ? KEY : 'personalhub_db_v1';
+      localStorage.setItem(keyName, JSON.stringify(DB));
+    } catch { }
+    try {
+      const keyName = typeof KEY !== 'undefined' ? KEY : 'personalhub_db_v1';
+      if (typeof IDB !== 'undefined' && IDB?.set) IDB.set(keyName, DB).catch(() => {});
+    } catch { }
+  }
+
+  /* ---------- Cliente HTTPS REST direto (independe de CDN ou WebSocket) ---------- */
+  async function restFetch(path, opts = {}, timeoutMs = 12000) {
+    if (!curUrl || !curKey) throw new Error('Supabase não configurado.');
+    const url = `${curUrl}/rest/v1/${path}`;
+    const isJwtKey = String(curKey || '').split('.').length === 3;
+    const headers = {
+      apikey: curKey,
+      ...(isJwtKey ? { Authorization: `Bearer ${curKey}` } : {}),
+      'Content-Type': 'application/json',
+      ...(opts.headers || {}),
+    };
+
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const tid = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+    try {
+      const res = await fetch(url, {
+        ...opts,
+        headers,
+        signal: ctrl ? ctrl.signal : undefined,
+      });
+      if (!res.ok) {
+        let msg = `Erro HTTP ${res.status}`;
+        try {
+          const errJson = await res.json();
+          msg = errJson?.message || errJson?.error || errJson?.hint || msg;
+          if (/relation.*personalhub_sync.*does not exist|Could not find the table/i.test(msg)) {
+            msg = 'Tabela "personalhub_sync" ainda não foi criada no Supabase. Rode o SQL de supabase/schema.sql no SQL Editor!';
+          }
+        } catch { }
+        const err = new Error(msg);
+        err.status = res.status;
+        throw err;
+      }
+      const txt = await res.text();
+      return txt ? JSON.parse(txt) : [];
+    } catch (e) {
+      if (e?.name === 'AbortError') throw new Error('Tempo esgotado ao conectar na nuvem. Verifique sua internet.');
+      throw e;
+    } finally {
+      if (tid) clearTimeout(tid);
+    }
+  }
+
+  async function fetchRemoteRows(ids = null) {
+    const filter = Array.isArray(ids) && ids.length
+      ? `&id=in.(${ids.map(x => encodeURIComponent(x)).join(',')})`
+      : '';
+    return restFetch(`${TABLE}?select=id,data,updated_at${filter}`, { method: 'GET' });
+  }
+
+  async function fetchRemoteMeta() {
+    return restFetch(`${TABLE}?select=id,updated_at`, { method: 'GET' }, 8000);
+  }
+
+  async function upsertRemoteRows(rows) {
+    return restFetch(TABLE, {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
+      body: JSON.stringify(rows),
+    });
+  }
+
+  /* ---------- Realtime (WebSocket) + Polling leve (funciona em 100% das redes móveis) ---------- */
+  function setupRealtimeAndPolling() {
+    stopRealtimeAndPolling();
+    if (!enabled) return;
+
+    // 1) WebSocket Realtime via supabase-js (se o CDN estiver disponível)
+    if (window.supabase?.createClient) {
+      try {
+        sb = window.supabase.createClient(curUrl, curKey, {
+          auth: { persistSession: false, autoRefreshToken: false },
+        });
+        realtimeChannelSub = sb
+          .channel('personalhub-sync-live')
+          .on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, payload => {
+            const rowId = payload?.new?.id || payload?.old?.id;
+            const rowUpd = payload?.new?.updated_at;
+            if (rowId && rowUpd && remoteMeta[rowId] === rowUpd) return;
+            handleIncomingCloudSignal(rowId ? [rowId] : ALL_IDS);
+          })
+          .subscribe();
+      } catch (e) {
+        console.debug('Realtime WebSocket fallback para polling HTTPS:', e?.message || e);
+      }
+    }
+
+    // 2) Polling leve por metadados (a cada 10s, ~200 bytes) — garante sincronia mesmo em redes 4G/5G que bloqueiam WebSockets
+    pollTimer = setInterval(async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      if (busy) return;
+      try {
+        const metaRows = await fetchRemoteMeta();
+        if (!Array.isArray(metaRows)) return;
+        const changedIds = [];
+        metaRows.forEach(r => {
+          if (r.id && r.updated_at && remoteMeta[r.id] !== r.updated_at) {
+            changedIds.push(r.id);
+          }
+        });
+        if (changedIds.length) {
+          await pullAll({ ids: changedIds, silentUiRefresh: false });
+        }
+      } catch { }
+    }, 10000);
+  }
+
+  function stopRealtimeAndPolling() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    if (sb && realtimeChannelSub) {
+      try { sb.removeChannel(realtimeChannelSub); } catch { }
+      realtimeChannelSub = null;
+    }
+    sb = null;
+  }
+
+  let incomingTimer = null;
+  function handleIncomingCloudSignal(ids) {
+    clearTimeout(incomingTimer);
+    incomingTimer = setTimeout(async () => {
+      if (busy) return;
+      try {
+        await pullAll({ ids, silentUiRefresh: false });
+      } catch { }
+    }, 250);
+  }
+
+  function refreshUiAfterPull() {
+    if (typeof S === 'undefined' || !S) return;
+    if (S.user && Array.isArray(DB?.users)) {
+      const updatedMe = DB.users.find(u => u.id === S.user.id);
+      if (updatedMe) {
+        if (!updatedMe.active) {
+          S.user = null;
+          try { sessionStorage.removeItem('personalhub_sess'); localStorage.removeItem('personalhub_sess'); } catch { }
+          if (typeof render === 'function') render();
+          if (typeof toast === 'function') toast('Conta desativada pela administração.');
+          return;
+        }
+        S.user = updatedMe;
+      }
+    }
+    if (typeof document !== 'undefined') {
+      const isModalOpen = !!document.getElementById('modal');
+      const isTyping = document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
+      if (!isModalOpen && !isTyping && typeof render === 'function' && S.user) {
+        render();
+      }
+    }
+  }
+
+  /* ---------- Operações Principais: Pull & Push com Merge Sem Conflitos ---------- */
+  async function pullAll(opts = {}) {
+    if (!enabled) return { hasRemoteData: false, updated: false };
+    const ids = opts.ids || ALL_IDS;
+    const rows = await fetchRemoteRows(opts.ids || null);
+    if (!Array.isArray(rows) || rows.length === 0) {
+      lastSyncAt = Date.now();
+      lastSyncError = null;
+      return { hasRemoteData: false, updated: false };
+    }
+
+    if (typeof DB === 'undefined' || !DB) DB = emptyDB();
+    ensureMetaFields();
+
+    const fetchedIds = [];
+    rows.forEach(r => {
+      if (!r || !r.id) return;
+      remoteMeta[r.id] = r.updated_at || new Date().toISOString();
+      applyMergedRow(r.id, r.data, !!opts.preferRemote);
+      fetchedIds.push(r.id);
+    });
+
+    // Garante sementes de alimentos/dicas caso o banco venha sem eles
+    if ((!DB.foods || !DB.foods.length) && typeof FOODS_SEED !== 'undefined') DB.foods = FOODS_SEED;
+    if ((!DB.tips || !DB.tips.length) && typeof TIPS_SEED !== 'undefined') DB.tips = TIPS_SEED;
+
+    takeSnapshot(fetchedIds.length ? fetchedIds : ids);
+    saveLocalCacheSilently();
+    lastSyncAt = Date.now();
+    lastSyncError = null;
+
+    if (!opts.silentUiRefresh) refreshUiAfterPull();
+    return { hasRemoteData: true, updated: true, count: rows.length };
+  }
+
+  async function syncNow(forceAll = false) {
+    if (!enabled) return false;
+    if (typeof DB === 'undefined' || !DB) return false;
+    clearTimeout(queueTimer);
+
+    if (busy) {
+      pendingPush = true;
+      if (forceAll) pendingForceAll = true;
+      return activePushPromise || Promise.resolve(true);
+    }
+
+    busy = true;
+    activePushPromise = (async () => {
+      try {
+        ensureMetaFields();
+        detectKeyChanges();
+
+        const dirtyIds = ALL_IDS.filter(id => {
+          if (forceAll) return true;
+          const curStr = JSON.stringify(packRow(id));
+          return snap[id] !== curStr;
+        });
+
+        if (!dirtyIds.length) {
+          lastSyncAt = Date.now();
+          lastSyncError = null;
+          return true;
+        }
+
+        // 1) Busca estado remoto atual apenas das coleções alteradas para fazer merge seguro (evita sobrescrever outros celulares!)
+        let remoteRows = [];
+        try {
+          remoteRows = await fetchRemoteRows(dirtyIds);
+        } catch (err) {
+          // Se falhou ao buscar, propaga erro para manter pendingPush
+          throw err;
+        }
+        const remoteById = new Map((Array.isArray(remoteRows) ? remoteRows : []).map(r => [r.id, r]));
+
+        const nowIso = new Date().toISOString();
+        const payloadToUpsert = [];
+
+        dirtyIds.forEach(id => {
+          const remoteRow = remoteById.get(id);
+          if (remoteRow?.data) {
+            applyMergedRow(id, remoteRow.data, false);
+          }
+          const packed = packRow(id);
+          payloadToUpsert.push({ id, data: packed, updated_at: nowIso });
+        });
+
+        // 2) Grava no Supabase
+        const savedRows = await upsertRemoteRows(payloadToUpsert);
+        (Array.isArray(savedRows) ? savedRows : payloadToUpsert).forEach(r => {
+          if (r?.id) remoteMeta[r.id] = r.updated_at || nowIso;
+        });
+
+        takeSnapshot(dirtyIds);
+        saveLocalCacheSilently();
+        lastSyncAt = Date.now();
+        lastSyncError = null;
+        return true;
+      } catch (e) {
+        lastSyncError = e?.message || 'Erro de sincronização';
+        console.error('Cloud syncNow error:', e);
+        return false;
+      } finally {
+        busy = false;
+        activePushPromise = null;
+        if (pendingPush) {
+          const nextForce = pendingForceAll;
+          pendingPush = false;
+          pendingForceAll = false;
+          syncNow(nextForce);
+        }
+      }
+    })();
+
+    return activePushPromise;
   }
 
   function initClient(url, key) {
-    curUrl = (url || '').trim();
-    curKey = (key || '').trim();
-    enabled = !!(curUrl && curKey && window.supabase);
+    curKey = String(key || '').trim();
+    curUrl = cleanUrl(url || '');
+    if (!curUrl && curKey) curUrl = deriveUrlFromJwt(curKey);
+    enabled = !!(curUrl && curKey && /^https?:\/\//i.test(curUrl));
+    remoteMeta = {};
+    snap = {};
     if (enabled) {
-      try {
-        sb = window.supabase.createClient(curUrl, curKey);
-        setupCloudRealtime();
-      } catch (err) {
-        console.error('Erro ao conectar Supabase:', err);
-        enabled = false;
-      }
+      setupRealtimeAndPolling();
     } else {
-      if (sb && realtimeChannelSub) {
-        try { sb.removeChannel(realtimeChannelSub); } catch { }
-        realtimeChannelSub = null;
-      }
-      sb = null;
+      stopRealtimeAndPolling();
     }
     return enabled;
   }
+
   if (enabled) initClient(curUrl, curKey);
-
-  const strip = (o, keys) => keys.reduce((r, k) => (o[k] !== undefined && (r[k] = o[k]), r), {});
-  const plain = k => ({ get: () => DB[k], set: r => { DB[k] = r; }, to: r => r });
-
-  // Mapeamento coleção do app <-> tabela do banco
-  const COL = {
-    users: {
-      table: 'profiles',
-      updateOnly: true,
-      get: () => DB.users,
-      set: r => {
-        DB.users = r.map(({ trainer_id, ...u }) => {
-          let report = null;
-          let finance = null;
-          let notes = u.notes || '';
-          if (notes.includes('__FINANCE_JSON__:')) {
-            try {
-              const parts = notes.split('__FINANCE_JSON__:');
-              notes = parts[0].trim();
-              finance = JSON.parse(parts[1]);
-            } catch { }
-          }
-          if (notes.includes('__REPORT_JSON__:')) {
-            try {
-              const parts = notes.split('__REPORT_JSON__:');
-              notes = parts[0].trim();
-              report = JSON.parse(parts[1]);
-            } catch { }
-          }
-          return {
-            ...u,
-            notes,
-            report: report || u.report || null,
-            finance: finance || u.finance || null,
-            autonomous: u.autonomous ?? (!trainer_id || notes.includes('Autônomo')),
-            trainerId: trainer_id || null,
-          };
-        });
-      },
-      to: u => {
-        let notes = (u.notes || '').split('__REPORT_JSON__:')[0].split('__FINANCE_JSON__:')[0].trim();
-        if (u.report) {
-          notes = `${notes} __REPORT_JSON__:${JSON.stringify(u.report)}`.trim();
-        }
-        if (u.finance) {
-          notes = `${notes} __FINANCE_JSON__:${JSON.stringify(u.finance)}`.trim();
-        }
-        return {
-          ...strip(u, ['id', 'email', 'name', 'role', 'active', 'phone', 'age', 'height', 'goal', 'injuries', 'weight', 'photo']),
-          notes,
-          trainer_id: u.trainerId || null,
-        };
-      },
-    },
-    workouts: {
-      table: 'workouts',
-      get: () => Object.entries(DB.workouts).flatMap(([sid, ds]) => (ds || []).map((d, i) => ({ id: d.id, uid: sid, pos: i, data: { name: d.name, exercises: d.exercises } }))),
-      set: rows => { DB.workouts = {}; rows.sort((a, b) => a.pos - b.pos).forEach(r => (DB.workouts[r.uid] = DB.workouts[r.uid] || []).push({ id: r.id, ...r.data })); },
-      to: r => r,
-    },
-    templates: { table: 'templates', ...plain('templates') },
-    checkins: { table: 'checkins', ...plain('checkins') },
-    water: { table: 'water', ...plain('water') },
-    cardio: { table: 'cardio', ...plain('cardio') },
-    weights: { table: 'weights', ...plain('weights') },
-    tips: { table: 'tips', ...plain('tips') },
-    foods: { table: 'foods', ...plain('foods') },
-    logs: { table: 'logs', get: () => DB.logs, set: r => { DB.logs = r.map(({ workout_id, ...x }) => ({ ...x, workoutId: workout_id })); }, to: ({ workoutId, ...x }) => ({ ...x, workout_id: workoutId }) },
-    posts: {
-      table: 'posts',
-      get: () => DB.posts || [],
-      set: r => { DB.posts = r.map(({ author_name, author_role, author_photo, ...x }) => ({ ...x, authorName: author_name, authorRole: author_role, authorPhoto: author_photo, likes: Array.isArray(x.likes) ? x.likes : [] })); },
-      to: ({ authorName, authorRole, authorPhoto, ...x }) => ({ ...x, author_name: authorName || '', author_role: authorRole || 'student', author_photo: authorPhoto || '', likes: Array.isArray(x.likes) ? x.likes : [] }),
-    },
-    messages: { table: 'messages', get: () => DB.messages, set: r => { DB.messages = r.map(({ to_id, from_id, ...x }) => ({ ...x, to: to_id, from: from_id || null })); }, to: ({ to, from, ...x }) => ({ ...x, to_id: to, from_id: from || null }) },
-    settings: { table: 'settings', get: () => Object.entries(DB.settings).map(([u, d]) => ({ id: u, uid: u, data: d })), set: r => { DB.settings = {}; r.forEach(x => { DB.settings[x.uid] = x.data; }); }, to: r => r },
-  };
-
-  const emptyDB = () => ({ users: [], workouts: {}, templates: [], checkins: [], water: [], logs: [], cardio: [], weights: [], posts: [], messages: [], tips: [], foods: [], settings: {} });
-
-  async function fetchAll(table) {
-    let out = [], from = 0;
-    for (;;) {
-      const { data, error } = await sb.from(table).select('*').order('id').range(from, from + 999);
-      if (error) throw error;
-      out = out.concat(data);
-      if (data.length < 1000) return out;
-      from += 1000;
-    }
-  }
-  const rowsOf = c => { c.get().forEach(o => { if (!o.id) o.id = uid(); }); return c.get().map(c.to); };
-  const takeSnapshot = () => { for (const [k, c] of Object.entries(COL)) snap[k] = new Map(rowsOf(c).map(r => [r.id, JSON.stringify(r)])); };
-
-  async function loadAll() {
-    DB = emptyDB();
-    for (const [, c] of Object.entries(COL)) c.set(await fetchAll(c.table));
-    // Primeiro acesso do CEO: cadastra alimentos e dicas padrão
-    const authId = (await sb.auth.getUser()).data.user?.id;
-    const me = DB.users.find(u => u.id === authId);
-    if (me?.role === 'ceo' || me?.role === 'admin') {
-      if (me.role === 'admin') me.role = 'ceo';
-      if (!DB.foods.length) DB.foods = FOODS_SEED.map(f => ({ ...f, owner: null }));
-      if (!DB.tips.length) DB.tips = TIPS_SEED.map(t => ({ ...t, owner: null }));
-      takeSnapshotEmptyFor(['foods', 'tips']);
-      flush();
-    } else {
-      if (!DB.foods.length) DB.foods = FOODS_SEED;
-      if (!DB.tips.length) DB.tips = TIPS_SEED;
-      takeSnapshot();
-    }
-  }
-  function takeSnapshotEmptyFor(ks) { takeSnapshot(); ks.forEach(k => { snap[k] = new Map(); }); }
-
-  async function flush() {
-    if (busy) { dirty = true; return; }
-    busy = true;
-    try {
-      for (const [k, c] of Object.entries(COL)) {
-        const rows = rowsOf(c), cur = new Map(rows.map(r => [r.id, JSON.stringify(r)])), old = snap[k] || new Map();
-        for (const r of rows.filter(r => old.get(r.id) !== cur.get(r.id))) {
-          const q = (old.has(r.id) || c.updateOnly) ? sb.from(c.table).update(r).eq('id', r.id) : sb.from(c.table).insert(r);
-          const { error } = await q; if (error) throw error;
-        }
-        if (!c.updateOnly) {
-          const del = [...old.keys()].filter(i => !cur.has(i));
-          if (del.length) { const { error } = await sb.from(c.table).delete().in('id', del); if (error) throw error; }
-        }
-        snap[k] = cur;
-      }
-    } catch (e) { console.error(e); toast('⚠️ Falha ao sincronizar. Tente novamente.'); }
-    busy = false;
-    if (dirty) { dirty = false; flush(); }
-  }
-
-  const friendly = e => /Invalid login/i.test(e.message) ? 'E-mail ou senha inválidos.' : /banned/i.test(e.message) ? 'Conta desativada. Fale com a administração.' : e.message;
 
   return {
     get enabled() { return enabled; },
-    getConfig() { return { url: curUrl, key: curKey }; },
-    async connect(url, key) {
-      if (!url || !key) throw new Error('Preencha a URL e a Anon Key do Supabase.');
-      localStorage.setItem('personalhub_supabase_url', url.trim());
-      localStorage.setItem('personalhub_supabase_key', key.trim());
-      const ok = initClient(url, key);
-      if (!ok) throw new Error('Não foi possível inicializar a biblioteca Supabase.');
-      await loadAll();
-      return true;
+    get client() { return sb; },
+    get status() {
+      return {
+        enabled,
+        url: curUrl,
+        lastSyncAt,
+        lastSyncError,
+      };
     },
-    async disconnect() {
-      if (sb && realtimeChannelSub) {
-        try { sb.removeChannel(realtimeChannelSub); } catch { }
-        realtimeChannelSub = null;
+    getConfig() { return { url: curUrl, key: curKey }; },
+
+    markUserDirty(id) {
+      if (id) dirtyUserIds.add(id);
+    },
+
+    markDeleted(bucket, id) {
+      if (!id) return;
+      ensureMetaFields();
+      const b = ['users', 'activity', 'content'].includes(bucket) ? bucket : 'users';
+      DB.__deleted[b][id] = Date.now();
+    },
+
+    async testConnection(url, key) {
+      const prevUrl = curUrl, prevKey = curKey, prevEnabled = enabled;
+      try {
+        curUrl = cleanUrl(url);
+        curKey = String(key || '').trim();
+        if (!curUrl && curKey) curUrl = deriveUrlFromJwt(curKey);
+        if (!curUrl || !curKey) throw new Error('Preencha a Project URL e a Anon Public Key do Supabase.');
+        await fetchRemoteMeta();
+        return { ok: true, url: curUrl, key: curKey };
+      } finally {
+        curUrl = prevUrl; curKey = prevKey; enabled = prevEnabled;
       }
+    },
+
+    async connect(url, key) {
+      const tested = await this.testConnection(url, key);
+      localStorage.setItem('personalhub_supabase_url', tested.url);
+      localStorage.setItem('personalhub_supabase_key', tested.key);
+      initClient(tested.url, tested.key);
+
+      // Puxa o que já existir na nuvem e faz merge com os dados atuais do dispositivo (não perde cadastros já feitos!)
+      const res = await pullAll({ silentUiRefresh: true });
+      if (typeof DB === 'undefined' || !DB || !Array.isArray(DB.users) || !DB.users.length) {
+        if (typeof seed === 'function') await seed();
+      }
+      if (typeof ensureAllFinancesAndMigrate === 'function') await ensureAllFinancesAndMigrate();
+      // Garante que todos os cadastros locais (ex.: CEO, professores e alunos criados antes) subam imediatamente para a nuvem!
+      await syncNow(true);
+      return { ok: true, hadRemote: res.hasRemoteData };
+    },
+
+    async disconnect() {
       localStorage.removeItem('personalhub_supabase_url');
       localStorage.removeItem('personalhub_supabase_key');
       initClient('', '');
       return true;
     },
-    queue() { clearTimeout(timer); timer = setTimeout(flush, 300); },
-    async login(email, pw) {
-      const { error } = await sb.auth.signInWithPassword({ email, password: pw });
-      if (error) throw new Error(friendly(error));
-      return this.restore(true);
+
+    queue() {
+      if (!enabled) return;
+      clearTimeout(queueTimer);
+      queueTimer = setTimeout(() => { syncNow(false); }, 350);
     },
-    async restore(strict) {
-      const { data: { session } } = await sb.auth.getSession();
-      if (!session) return null;
-      await loadAll();
-      const u = DB.users.find(x => x.id === session.user.id);
-      if (!u || !u.active) { await sb.auth.signOut(); if (strict) throw new Error(u ? 'Conta desativada.' : 'Perfil não encontrado.'); return null; }
+
+    syncNow,
+    pullAll,
+
+    async login(email, pw) {
+      const em = String(email || '').trim().toLowerCase();
+      // 1) Sempre busca a lista de usuários mais recente da nuvem ANTES de validar o login!
+      //    Assim qualquer Professor criado pelo CEO ou Aluno criado pelo Professor entra NA HORA de qualquer celular/rede.
+      const pullRes = await pullAll({ ids: ['users'], preferRemote: true, silentUiRefresh: true });
+      if (!pullRes.hasRemoteData) {
+        // Primeiro acesso na nuvem vazia: inicializa o banco padrão e envia para a nuvem
+        if (typeof syncFromLocalStore === 'function') await syncFromLocalStore();
+        if (!DB || !Array.isArray(DB.users) || !DB.users.length) {
+          if (typeof seed === 'function') await seed();
+        }
+        if (typeof ensureAllFinancesAndMigrate === 'function') await ensureAllFinancesAndMigrate();
+        await syncNow(true);
+      }
+
+      const u = (DB?.users || []).find(x => (x.email || '').trim().toLowerCase() === em);
+      if (!u) {
+        throw new Error(`E-mail "${em}" não encontrado na nuvem. Verifique se o e-mail está correto ou peça ao CEO/Professor para verificar o cadastro.`);
+      }
+      const ok = typeof verifyUserPassword === 'function' ? await verifyUserPassword(u, pw) : (u.plainPw === pw);
+      if (!ok) {
+        throw new Error(`Senha incorreta para ${u.name}. Verifique letras maiúsculas/minúsculas ou peça a redefinição de senha.`);
+      }
+      if (!u.active) {
+        throw new Error('Conta desativada. Fale com a administração.');
+      }
+
+      // 2) Baixa treinos, cargas, financeiro, mensagens e comunidade da nuvem
+      await pullAll({ preferRemote: true, silentUiRefresh: true });
+      const freshUser = (DB?.users || []).find(x => x.id === u.id) || u;
+
+      try {
+        sessionStorage.setItem('personalhub_sess', freshUser.id);
+        localStorage.setItem('personalhub_sess', freshUser.id);
+      } catch { }
+      setupRealtimeAndPolling();
+      return freshUser;
+    },
+
+    async restore() {
+      if (!enabled) return null;
+      let res = { hasRemoteData: false };
+      try {
+        res = await pullAll({ preferRemote: true, silentUiRefresh: true });
+      } catch (err) {
+        // Sem internet no momento (ex.: academia sem sinal): usa cache local offline
+        console.warn('Cloud offline no boot, usando cache local:', err?.message || err);
+        if (typeof syncFromLocalStore === 'function') await syncFromLocalStore();
+      }
+
+      if (!res.hasRemoteData && (!DB || !Array.isArray(DB.users) || !DB.users.length)) {
+        if (typeof syncFromLocalStore === 'function') await syncFromLocalStore();
+        if (!DB || !Array.isArray(DB.users) || !DB.users.length) {
+          if (typeof seed === 'function') await seed();
+        }
+        if (typeof ensureAllFinancesAndMigrate === 'function') await ensureAllFinancesAndMigrate();
+        syncNow(true).catch(() => {});
+      }
+
+      const sid = sessionStorage.getItem('personalhub_sess') || localStorage.getItem('personalhub_sess');
+      if (!sid) return null;
+      const u = (DB?.users || []).find(x => x.id === sid);
+      if (!u || !u.active) {
+        try { sessionStorage.removeItem('personalhub_sess'); localStorage.removeItem('personalhub_sess'); } catch { }
+        return null;
+      }
+      setupRealtimeAndPolling();
       return u;
     },
-    async logout() { await flush(); await sb.auth.signOut(); },
-    async setOwnPassword(pw) { const { error } = await sb.auth.updateUser({ password: pw }); if (error) throw error; },
-    async fn(action, payload) {
-      const { data, error } = await sb.functions.invoke('admin-users', { body: { action, ...payload } });
-      if (error) { let m = error.message; try { m = (await error.context.json()).error || m; } catch { } throw new Error(m); }
-      if (data?.error) throw new Error(data.error);
-      return data;
+
+    async logout() {
+      try { await syncNow(false); } catch { }
+      try { sessionStorage.removeItem('personalhub_sess'); localStorage.removeItem('personalhub_sess'); } catch { }
     },
+
+    async refresh() {
+      if (!enabled || busy) return;
+      try {
+        await syncNow(false);
+        await pullAll({ silentUiRefresh: false });
+      } catch (e) {
+        console.error('Cloud refresh error:', e);
+      }
+    },
+
     async analyzeMealEdge(payload) {
+      if (!sb) throw new Error('Edge Function indisponível.');
       const { data, error } = await sb.functions.invoke('analyze-meal', { body: payload });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       return data;
     },
-    async refresh() { if (busy || document.getElementById('modal')) return; try { await flush(); await loadAll(); S.user = DB.users.find(u => u.id === S.user.id) || S.user; render(); } catch (e) { console.error(e); } },
-    get client() { return sb; },
   };
 })();
-document.addEventListener('visibilitychange', () => { if (!document.hidden && Cloud.enabled && S.user) Cloud.refresh(); });
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && Cloud.enabled) Cloud.refresh();
+  });
+}
+if (typeof window !== 'undefined' && window.addEventListener) {
+  window.addEventListener('online', () => {
+    if (Cloud.enabled) Cloud.refresh();
+  });
+}
 
 /* ======================= PERSISTÊNCIA DE PROGRESSÃO DE CARGAS, MICROCICLO E MESOCICLO ======================= */
 const LOAD_LOGS_STORAGE_KEY = 'personalhub_workout_load_logs_v1';
@@ -281,15 +813,11 @@ function _ensureUserProgressionStore(userId, mesocycle = 'Mesociclo 1') {
 
 /**
  * Salva o registro de carga do exercício (individual ou lote de exercícios do treino).
- * Campos suportados em logData:
- * { date, user_id, mesocycle, week, workout_split, exercise_id, exercise_name, weight_kg, reps_done, rir, notes, done, session_notes }
- * ou { entries: [...], sessionSummary: {...} }
+ * Sincroniza automaticamente na nuvem via DB.settings -> save() -> Cloud.queue().
  */
 async function saveWorkoutLoadLog(logData) {
   const entries = Array.isArray(logData?.entries) ? logData.entries : [logData];
   const savedRecords = [];
-
-  // 1) Atualiza armazenamento local (localStorage + DB.settings para sincronizar com IndexedDB e tabela settings)
   const allLocalLogs = _readLocalStoreJson(LOAD_LOGS_STORAGE_KEY, []);
 
   for (const item of entries) {
@@ -301,7 +829,7 @@ async function saveWorkoutLoadLog(logData) {
       mesocycle: String(item.mesocycle || 'Mesociclo 1'),
       week: Number(item.week || 1),
       workout_split: String(item.workout_split || 'A'),
-       workout_id: item.workout_id || null,
+      workout_id: item.workout_id || null,
       exercise_id: String(item.exercise_id || ''),
       exercise_name: String(item.exercise_name || ''),
       weight_kg: item.weight_kg === '' || item.weight_kg === null || item.weight_kg === undefined ? '' : Number(item.weight_kg),
@@ -362,33 +890,6 @@ async function saveWorkoutLoadLog(logData) {
 
   _writeLocalStoreJson(LOAD_LOGS_STORAGE_KEY, allLocalLogs);
   if (typeof save === 'function') save();
-
-  // 2) Tenta gravar também na tabela dedicada do Supabase (com fallback silencioso se offline ou tabela não criada)
-  if (Cloud.enabled && Cloud.client && savedRecords.length) {
-    try {
-      const sbRows = savedRecords.map(r => ({
-        id: r.id,
-        date: r.date,
-        user_id: r.user_id,
-        mesocycle: r.mesocycle,
-        week: r.week,
-        workout_split: r.workout_split,
-        exercise_id: r.exercise_id,
-        weight_kg: r.weight_kg === '' ? null : Number(r.weight_kg),
-        reps_done: r.reps_done === '' ? null : Number(r.reps_done),
-        rir: r.rir,
-        notes: r.notes,
-      }));
-      const { error } = await Cloud.client.from('workout_load_logs').upsert(sbRows, { onConflict: 'id' });
-      if (error) {
-        // Fallback automático já garantido via localStorage + DB.settings
-        console.debug('Fallback local ativo para workout_load_logs:', error.message);
-      }
-    } catch (err) {
-      console.debug('Modo offline/fallback em saveWorkoutLoadLog:', err?.message || err);
-    }
-  }
-
   return savedRecords;
 }
 
@@ -399,38 +900,6 @@ async function getWorkoutLoadHistory(userId, mesocycle = 'Mesociclo 1') {
   const uidStr = String(userId || '');
   const mesoStr = String(mesocycle || 'Mesociclo 1');
 
-  // 1) Se Supabase estiver ativo, tenta sincronizar registros da tabela workout_load_logs
-  if (Cloud.enabled && Cloud.client && uidStr) {
-    try {
-      const { data, error } = await Cloud.client
-        .from('workout_load_logs')
-        .select('*')
-        .eq('user_id', uidStr)
-        .eq('mesocycle', mesoStr);
-      if (!error && Array.isArray(data) && data.length) {
-        const store = _ensureUserProgressionStore(uidStr, mesoStr);
-        data.forEach(r => {
-          const wkKey = 'w' + Number(r.week || 1);
-          if (store) {
-            store.logs[wkKey] = store.logs[wkKey] || {};
-            store.logs[wkKey][r.exercise_id] = {
-              kg: r.weight_kg ?? '',
-              reps: r.reps_done ?? '',
-              rir: r.rir || 'RIR 1 (No Alvo)',
-              note: r.notes || '',
-              done: true,
-              date: r.date || '',
-              workout_split: r.workout_split || 'A',
-            };
-          }
-        });
-      }
-    } catch (err) {
-      console.debug('Fallback local em getWorkoutLoadHistory:', err?.message || err);
-    }
-  }
-
-  // 2) Combina dados de DB.settings[userId].loadProgression e localStorage
   const store = _ensureUserProgressionStore(uidStr, mesoStr) || { logs: {}, sessionHistory: [], schedule: null };
   const allLocalLogs = _readLocalStoreJson(LOAD_LOGS_STORAGE_KEY, []);
   const userLocalLogs = allLocalLogs.filter(x => x.user_id === uidStr && x.mesocycle === mesoStr);
@@ -486,29 +955,9 @@ async function saveWeeklySchedule(userId, mesocycle = 'Mesociclo 1', scheduleDat
   _writeLocalStoreJson(WEEKLY_SCHED_STORAGE_KEY, allSchedules);
 
   if (typeof save === 'function') save();
-
-  if (Cloud.enabled && Cloud.client) {
-    try {
-      const row = {
-        id: `${uidStr}__${mesoStr}`,
-        user_id: uidStr,
-        mesocycle: mesoStr,
-        schedule_data: scheduleData,
-        updated_at: new Date().toISOString(),
-      };
-      const { error } = await Cloud.client.from('weekly_schedules').upsert(row, { onConflict: 'id' });
-      if (error) {
-        console.debug('Fallback local ativo para weekly_schedules:', error.message);
-      }
-    } catch (err) {
-      console.debug('Modo offline/fallback em saveWeeklySchedule:', err?.message || err);
-    }
-  }
-
   return scheduleData;
 }
 
 window.saveWorkoutLoadLog = saveWorkoutLoadLog;
 window.getWorkoutLoadHistory = getWorkoutLoadHistory;
 window.saveWeeklySchedule = saveWeeklySchedule;
-

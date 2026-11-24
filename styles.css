@@ -1332,3 +1332,93 @@ th { color: var(--gold); font-weight: 600; }
   color: #f43f5e;
 }
 
+/* =========================================================================
+   SISTEMA DE UI SIMPLIFICADO & MODERNO (CEO, PROFESSORES E ALUNOS)
+   ========================================================================= */
+
+.dash-hero {
+  background: linear-gradient(135deg, rgba(20, 36, 20, 0.75) 0%, rgba(18, 24, 28, 0.95) 100%);
+  border: 1px solid rgba(143, 255, 0, 0.25);
+  border-radius: 16px;
+  padding: 14px 18px;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.metric-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+@media (max-width: 600px) {
+  .metric-strip {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.metric-card {
+  background: #12181c;
+  border: 1px solid #243039;
+  border-radius: 13px;
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  transition: transform .15s, border-color .15s, box-shadow .15s;
+}
+.metric-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(143, 255, 0, 0.4);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+.metric-card.alert {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: linear-gradient(145deg, #1f1414, #14191d);
+}
+
+.metric-label {
+  font-size: .74rem;
+  color: var(--mut);
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: .4px;
+}
+.metric-val {
+  font-family: var(--font-h);
+  font-size: 1.45rem;
+  line-height: 1.15;
+  margin: 3px 0;
+  font-weight: 700;
+  color: #fff;
+}
+.metric-sub {
+  font-size: .72rem;
+  color: var(--mut);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sticky-workout-bar {
+  position: sticky;
+  bottom: 60px;
+  z-index: 40;
+  background: rgba(14, 19, 23, 0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(143, 255, 0, 0.35);
+  border-radius: 14px;
+  padding: 8px 12px;
+  margin: 14px 0 10px;
+  display: flex;
+  gap: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+@media (min-width: 900px) {
+  .sticky-workout-bar {
+    bottom: 16px;
+  }
+}
+
+

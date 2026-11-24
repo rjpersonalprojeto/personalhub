@@ -725,8 +725,8 @@ function mergeUserLists(primaryUsers = [], secondaryUsers = []) {
   return out;
 }
 
-async function syncFromLocalStore() {
-  if (Cloud.enabled) return;
+async function syncFromLocalStore(forceLocal = false) {
+  if (Cloud.enabled && !forceLocal && DB && Array.isArray(DB.users) && DB.users.length) return DB;
   let lsDb = null, idbDb = null;
   const raw = localStorage.getItem(KEY);
   if (raw) {
@@ -879,8 +879,8 @@ async function ensureAllFinancesAndMigrate() {
 }
 
 async function load() {
-  if (Cloud.enabled) return;
-  await syncFromLocalStore();
+  if (Cloud.enabled && DB && Array.isArray(DB.users) && DB.users.length) return;
+  await syncFromLocalStore(true);
   if (DB && Array.isArray(DB.users) && DB.users.length) {
     await ensureAllFinancesAndMigrate();
   } else {
@@ -975,31 +975,31 @@ const week = () => [...Array(7)].map((_, i) => addDays(i - 6));
 const NAV = {
   ceo: [
     ['home', 'layout-dashboard', 'Painel'],
-    ['finance', 'dollar-sign', 'Financeiro'],
     ['students', 'users', 'Alunos'],
     ['workouts', 'dumbbell', 'Treinos'],
+    ['finance', 'dollar-sign', 'Financeiro'],
     ['inbody', 'activity', 'InBody & Dobras'],
     ['trainers', 'shield-check', 'Professores'],
     ['autostudents', 'clipboard-list', 'Sem Personal'],
     ['community', 'flame', 'Comunidade'],
     ['msgs', 'message-circle', 'Avisos'],
     ['study', 'book-open', 'Estudo'],
-    ['settings', 'settings', 'Config.'],
+    ['settings', 'settings', 'Configurações'],
   ],
   trainer: [
     ['home', 'layout-dashboard', 'Painel'],
+    ['students', 'users', 'Meus Alunos'],
+    ['workouts', 'dumbbell', 'Treinos & Cargas'],
     ['finance', 'dollar-sign', 'Financeiro'],
-    ['students', 'users', 'Alunos'],
-    ['workouts', 'dumbbell', 'Treinos'],
     ['inbody', 'activity', 'InBody & Dobras'],
     ['community', 'flame', 'Comunidade'],
     ['msgs', 'message-circle', 'Avisos'],
     ['study', 'book-open', 'Estudo'],
-    ['settings', 'settings', 'Config.'],
+    ['settings', 'settings', 'Configurações'],
   ],
   student: [
     ['workout', 'dumbbell', 'Treino'],
-    ['profile', 'user', 'Perfil'],
+    ['profile', 'user', 'Início & Metas'],
     ['inbody', 'activity', 'InBody & Dobras'],
     ['community', 'flame', 'Comunidade'],
     ['study', 'book-open', 'Estudo'],
@@ -1011,23 +1011,23 @@ const NAV = {
 const MOBILE_NAV = {
   ceo: [
     ['home', 'layout-dashboard', 'Painel'],
-    ['finance', 'dollar-sign', 'Financeiro'],
     ['students', 'users', 'Alunos'],
     ['workouts', 'dumbbell', 'Treinos'],
+    ['finance', 'dollar-sign', 'Financeiro'],
     ['__more__', 'more-horizontal', 'Mais'],
   ],
   trainer: [
     ['home', 'layout-dashboard', 'Painel'],
-    ['finance', 'dollar-sign', 'Financeiro'],
     ['students', 'users', 'Alunos'],
     ['workouts', 'dumbbell', 'Treinos'],
+    ['finance', 'dollar-sign', 'Financeiro'],
     ['__more__', 'more-horizontal', 'Mais'],
   ],
   student: [
     ['workout', 'dumbbell', 'Treino'],
-    ['profile', 'user', 'Perfil'],
+    ['profile', 'user', 'Início'],
+    ['inbody', 'activity', 'InBody'],
     ['community', 'flame', 'Comunidade'],
-    ['study', 'book-open', 'Estudo'],
     ['__more__', 'more-horizontal', 'Mais'],
   ],
 };
@@ -1264,10 +1264,16 @@ function render() {
 
 /* ---------- Login ---------- */
 function renderLogin() {
+  const isCloud = Cloud.enabled;
   $('#app').innerHTML = `<div class="login"><div class="card fade" style="max-width:400px">
     <img class="login-logo" src="logo.jpg" alt="${esc(BRAND())}">
     <div class="brand-title" style="font-size:1.85rem;margin-bottom:2px">Personal<span>HUB</span></div>
-    <p class="mut" style="margin-bottom:14px;font-size:.85rem">Plataforma de Treinos, Nutrição e Gestão Financeira</p>
+    <p class="mut" style="margin-bottom:10px;font-size:.85rem">Plataforma de Treinos, Nutrição e Gestão Financeira</p>
+    <div style="text-align:center;margin-bottom:12px">
+      ${isCloud
+        ? `<span class="sync-badge online" style="font-size:.72rem">☁️ Nuvem Online · Acesso Multi-Celular Ativo</span>`
+        : `<span class="sync-badge local" style="font-size:.72rem;cursor:pointer" onclick="openSupabaseModal()" title="Clique para conectar o banco em nuvem">💾 Modo Local · Clique aqui para ativar Nuvem</span>`}
+    </div>
     <form onsubmit="doLogin(event)">
       <label for="em">E-mail</label>
       <input id="em" type="email" autocomplete="username" placeholder="seu@email.com" required>
@@ -1321,7 +1327,10 @@ async function saveSelfRegister(e) {
   const f = Object.fromEntries(new FormData(e.target));
   const cleanEmail = (f.email || '').trim().toLowerCase();
   const cleanPw = (f.pw || '').trim();
-  if (DB.users.some(u => (u.email || '').trim().toLowerCase() === cleanEmail)) {
+  if (Cloud.enabled) {
+    try { await Cloud.pullAll({ ids: ['users'], preferRemote: true, silentUiRefresh: true }); } catch { }
+  }
+  if ((DB?.users || []).some(u => (u.email || '').trim().toLowerCase() === cleanEmail)) {
     return toast('Este e-mail já possui cadastro!');
   }
   const role = f.role === 'trainer' ? 'trainer' : 'student';
@@ -1359,7 +1368,9 @@ async function saveSelfRegister(e) {
 
   DB.users.push(newUser);
   if (role === 'student') DB.workouts[newUser.id] = [];
+  Cloud.markUserDirty?.(newUser.id);
   save();
+  if (Cloud.enabled) await Cloud.syncNow(false);
   closeModal();
 
   S.user = newUser;
@@ -1368,7 +1379,7 @@ async function saveSelfRegister(e) {
   localStorage.setItem('personalhub_sess', newUser.id);
   S.view = newUser.role === 'student' ? 'workout' : 'home';
   render();
-  toast(`🎉 Bem-vindo(a), ${newUser.name.split(' ')[0]}! Conta criada com sucesso!`);
+  toast(`🎉 Bem-vindo(a), ${newUser.name.split(' ')[0]}! Conta criada ${Cloud.enabled ? 'e sincronizada na nuvem ☁️' : 'com sucesso'}!`);
 }
 
 async function doLogin(e) {
@@ -1376,15 +1387,22 @@ async function doLogin(e) {
   const emVal = ($('#em')?.value || '').trim().toLowerCase();
   const pwVal = $('#pw')?.value || '';
   if (Cloud.enabled) {
-    $('#err').textContent = 'Entrando...';
-    try { S.user = await Cloud.login(emVal, pwVal); S.ceoStudentMode = false; S.view = S.user.role === 'student' ? 'profile' : 'home'; render(); if (S.user.role === 'student') startReminders(); }
-    catch (err) { $('#err').textContent = err.message; }
+    $('#err').textContent = 'Conectando à nuvem...';
+    try {
+      S.user = await Cloud.login(emVal, pwVal);
+      S.ceoStudentMode = false;
+      S.view = S.user.role === 'student' ? 'workout' : 'home';
+      render();
+      if (S.user.role === 'student') startReminders();
+    } catch (err) {
+      $('#err').textContent = err?.message || 'Erro ao conectar na nuvem.';
+    }
     return;
   }
   await syncFromLocalStore();
   const u = (DB?.users || []).find(x => (x.email || '').trim().toLowerCase() === emVal);
   if (!u) {
-    return $('#err').innerHTML = `<div style="text-align:center">O e-mail "${esc(emVal)}" não foi encontrado neste navegador.<br><br>
+    return $('#err').innerHTML = `<div style="text-align:center">O e-mail "${esc(emVal)}" não foi encontrado neste aparelho.<br><span class="mut" style="font-size:.76rem">O app está no Modo Local. Para acessar cadastros feitos em outro celular ou rede, o CEO precisa ativar o Banco em Nuvem (Supabase).</span><br><br>
     <button type="button" class="btn sm ok-btn" style="width:100%" onclick="openSelfRegisterModal('${esc(emVal)}')">➕ Cadastrar esta conta agora</button></div>`;
   }
   const ok = await verifyUserPassword(u, pwVal);
@@ -1395,7 +1413,7 @@ async function doLogin(e) {
   S.user = u; S.ceoStudentMode = false;
   sessionStorage.setItem('personalhub_sess', u.id);
   localStorage.setItem('personalhub_sess', u.id);
-  S.view = u.role === 'student' ? 'profile' : 'home'; render();
+  S.view = u.role === 'student' ? 'workout' : 'home'; render();
   if (u.role === 'student') startReminders();
 }
 async function logout() {
@@ -1407,17 +1425,20 @@ async function logout() {
 async function changePw(e, id) {
   e.preventDefault(); const pw = (e.target.pw.value || '').trim();
   if (pw.length < 4) return toast('Informe uma senha válida (mín. 4 caracteres).');
-  if (Cloud.enabled) {
-    try { id === S.user.id ? await Cloud.setOwnPassword(pw) : await Cloud.fn('resetPassword', { id, password: pw }); closeModal(); toast('Senha atualizada ✅'); }
-    catch (err) { toast(err.message); }
-    return;
-  }
   const u = userById(id) || S.user;
   u.salt = uid() + uid();
   u.hash = await hash(pw, u.salt);
   u.plainPw = pw;
   u.updatedAt = Date.now();
-  save(); closeModal(); render(); toast(`Senha de ${u.name} atualizada com sucesso ✅`);
+  Cloud.markUserDirty?.(u.id);
+  save();
+  if (Cloud.enabled) {
+    toast('Sincronizando nova senha na nuvem...');
+    const ok = await Cloud.syncNow(false);
+    if (!ok) toast('⚠️ Senha salva localmente; será sincronizada assim que a internet voltar.');
+  }
+  closeModal(); render();
+  toast(`Senha de ${u.name} atualizada${Cloud.enabled ? ' na nuvem ☁️' : ''} ✅`);
 }
 const pwForm = id => {
   const u = userById(id);
@@ -1512,84 +1533,123 @@ const ADMIN = {
     const myTrainerFin = isTrainer() ? finStatus(S.user) : null;
     const ceoNoticesForTrainer = isTrainer() ? DB.messages.filter(m => m.to === S.user.id).slice(-3).reverse() : [];
 
-    return `<h1>${isCeo() ? 'Painel Geral (CEO)' : `Painel · Prof. ${esc(S.user.name)}`}</h1>
-    <p class="mut">${greet()}, ${esc(S.user.name.split(' ')[0])}! ${isCeo() ? 'Você tem visão e controle total de todos os professores, financeiro, alunos sem personal e alunos com personal.' : 'Bem-vindo! Você tem autonomia total para cadastrar seus alunos, montar treinos e gerenciar suas mensalidades e recebimentos.'}</p>
-
-    <!-- Resumo Financeiro Rápido no Painel -->
-    <div class="card" style="margin-top:12px;background:linear-gradient(135deg,#142514,#13191d);border-color:var(--gold)">
-      <div class="row sp" style="margin-bottom:10px">
-        <div>
-          <h2 style="margin-bottom:2px">💰 Resumo Financeiro ${isCeo() ? '(Professores & Alunos Sem Personal)' : `(Alunos do Prof. ${esc(S.user.name)})`}</h2>
-          <p class="mut">${isCeo() ? 'Controle quem já pagou, datas a vencer, inadimplências, reajustes e a conta bancária de recebimento.' : 'Acompanhe os alunos que já pagaram, quem ainda falta pagar, vencimentos e inadimplências.'}</p>
-        </div>
-        <div class="row">
-          <button class="btn" onclick="go('finance')">💰 Abrir Aba Financeiro</button>
-          ${isCeo() ? `<button class="btn ghost sm" onclick="openBankAccountModal()">🏦 Conta Bancária</button>` : ''}
-          <button class="btn ghost sm" onclick="openBulkAdjustmentModal()">📈 Fazer Reajuste</button>
-          ${isTrainer() ? `<button class="btn ok-btn sm" onclick="studentForm()">${ic('plus')}Cadastrar Novo Aluno</button>` : ''}
-        </div>
-      </div>
-      <div class="grid">
-        <div class="fin-stat ok" style="cursor:pointer" onclick="S.finFilter='paid';go('finance')">
-          <b>${fmtBRL(finSummary.paidTotal)}</b>
-          <span>✅ Já pagaram (${finSummary.paidCount})</span>
-        </div>
-        <div class="fin-stat warn" style="cursor:pointer" onclick="S.finFilter='due';go('finance')">
-          <b>${fmtBRL(finSummary.dueTotal)}</b>
-          <span>⏳ Falta pagar / A vencer (${finSummary.dueCount})</span>
-        </div>
-        <div class="fin-stat bad" style="cursor:pointer" onclick="S.finFilter='overdue';go('finance')">
-          <b>${fmtBRL(finSummary.overdueTotal)}</b>
-          <span>🚨 Inadimplentes (${finSummary.overdueCount})</span>
-        </div>
-        <div class="fin-stat" style="cursor:pointer" onclick="S.finFilter='all';go('finance')">
-          <b class="gold">${fmtBRL(finSummary.expectedTotal)}</b>
-          <span>📊 Total previsto (${finTargetList.length})</span>
+    return `
+      <!-- Topo Rápido & Ações Principais -->
+      <div class="dash-hero">
+        <div class="row sp" style="gap:10px;flex-wrap:wrap;align-items:center">
+          <div>
+            <div class="row" style="gap:8px;align-items:center">
+              <h1 style="margin:0;font-size:1.45rem">${isCeo() ? 'Painel Geral' : `Prof. ${esc(S.user.name)}`}</h1>
+              <span class="role-pill" style="font-size:.68rem">${isCeo() ? '👑 CEO' : '👨‍🏫 Personal'}</span>
+              ${Cloud.enabled ? `<span class="sync-badge online" style="font-size:.65rem;padding:2px 7px">☁️ Nuvem Online</span>` : ''}
+            </div>
+            <div class="mut" style="font-size:.82rem;margin-top:2px">${greet()}, <b>${esc(S.user.name.split(' ')[0])}</b>! ${act.length} alunos ativos · ${tr.length} treinaram hoje</div>
+          </div>
+          <div class="row" style="gap:6px;flex-wrap:wrap">
+            ${isTrainer() ? `<button class="btn ok-btn sm" onclick="studentForm()">${ic('plus')}Cadastrar Novo Aluno</button>` : ''}
+            ${isCeo() ? `<button class="btn ok-btn sm" onclick="studentForm()">${ic('plus')}Novo Aluno</button><button class="btn sm" onclick="trainerForm()">${ic('plus')}Novo Professor</button>` : ''}
+            <button class="btn ghost sm" onclick="go('workouts')">🏋️ Treinos</button>
+            <button class="btn ghost sm" onclick="go('finance')">💰 Financeiro</button>
+          </div>
         </div>
       </div>
-    </div>
 
-    ${isTrainer() && myTrainerFin ? `<div class="card" style="border-left:4px solid ${myTrainerFin.code === 'overdue' ? '#f87171' : myTrainerFin.code === 'paid' ? '#4ade80' : '#fbbf24'}">
-      <div class="row sp">
+      ${isCeo() && !Cloud.enabled ? `
+      <div class="card row sp" style="padding:10px 14px;margin-bottom:12px;border-left:4px solid #fbbf24;background:linear-gradient(135deg,#241c0d,#13191d)">
         <div>
-          <b>🏷️ Minha Assinatura na Plataforma:</b> <span class="fin-badge ${myTrainerFin.badgeClass}">${myTrainerFin.label}</span>
-          <div class="mut" style="margin-top:2px">Valor: <b class="gold">${fmtBRL(myTrainerFin.amount)}</b> (${esc(myTrainerFin.cycle)}) · ${esc(myTrainerFin.detailText)}</div>
+          <b>☁️ Ative o Acesso Multi-Celular (Todas as Redes)</b>
+          <div class="mut" style="font-size:.78rem;margin-top:2px">Conecte o banco gratuito (Supabase) para que Professores e Alunos entrem de qualquer celular/rede imediatamente após o cadastro.</div>
         </div>
-        <div class="row">
-          <button class="btn sm ok-btn" onclick="openInAppPaymentModal('${S.user.id}')">💳 Pagar pelo App (PIX, Crédito ou Débito)</button>
+        <button class="btn sm ok-btn" onclick="openSupabaseModal()">☁️ Ativar Nuvem</button>
+      </div>` : ''}
+
+      <!-- 4 Indicadores Rápidos (Limpo e Clicável) -->
+      <div class="metric-strip">
+        <div class="metric-card" onclick="go('students')" title="Ver alunos cadastrados">
+          <span class="metric-label">👥 ${isCeo() ? 'Total de Alunos' : 'Meus Alunos'}</span>
+          <b class="metric-val gold">${st.length}</b>
+          <span class="metric-sub">${act.length} ativos · ${st.length - act.length} inativos</span>
+        </div>
+        <div class="metric-card" onclick="go('workouts')" title="Ver treinos e cargas">
+          <span class="metric-label">🏋️ Treinaram Hoje</span>
+          <b class="metric-val" style="color:#4ade80">${tr.length}</b>
+          <span class="metric-sub">${away.length > 0 ? `⚠️ ${away.length} ausentes (+3d)` : 'Todos em dia 🎉'}</span>
+        </div>
+        <div class="metric-card" onclick="S.finFilter='paid';go('finance')" title="Ver mensalidades pagas">
+          <span class="metric-label">✅ Já Recebido</span>
+          <b class="metric-val" style="color:#4ade80">${fmtBRL(finSummary.paidTotal)}</b>
+          <span class="metric-sub">${finSummary.paidCount} aluno(s) quitados</span>
+        </div>
+        <div class="metric-card ${finSummary.overdueCount > 0 ? 'alert' : ''}" onclick="S.finFilter='overdue';go('finance')" title="Ver mensalidades a vencer e inadimplentes">
+          <span class="metric-label">⏳ Pendente / A Vencer</span>
+          <b class="metric-val" style="color:${finSummary.overdueCount > 0 ? '#f87171' : '#fbbf24'}">${fmtBRL(finSummary.dueTotal + finSummary.overdueTotal)}</b>
+          <span class="metric-sub">${finSummary.dueCount + finSummary.overdueCount} a receber ${finSummary.overdueCount > 0 ? `(${finSummary.overdueCount} atrasados)` : ''}</span>
+        </div>
+      </div>
+
+      ${isTrainer() && myTrainerFin ? `
+      <div class="card row sp" style="padding:10px 14px;margin-bottom:12px;border-left:4px solid ${myTrainerFin.code === 'overdue' ? '#f87171' : myTrainerFin.code === 'paid' ? '#4ade80' : '#fbbf24'}">
+        <div class="row" style="gap:8px">
+          <b>🏷️ Minha Assinatura:</b>
+          <span class="fin-badge ${myTrainerFin.badgeClass}">${myTrainerFin.label}</span>
+          <span class="mut">${fmtBRL(myTrainerFin.amount)}/mês · ${esc(myTrainerFin.detailText)}</span>
+        </div>
+        <div class="row" style="gap:6px">
+          <button class="btn sm ok-btn" onclick="openInAppPaymentModal('${S.user.id}')">💳 Pagar no App</button>
           <button class="btn sm ghost" onclick="openFinHistoryModal('${S.user.id}')">📜 Comprovantes</button>
         </div>
       </div>
-      ${ceoNoticesForTrainer.length ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid #242e35">${ceoNoticesForTrainer.map(m => `<div class="msg" style="margin-bottom:4px"><b>📣 Aviso da Administração (CEO):</b> ${esc(m.text)} <span class="mut">(${fmtDate(m.date.slice(0, 10))})</span></div>`).join('')}</div>` : ''}
-    </div>` : ''}
+      ${ceoNoticesForTrainer.length ? `<div class="card" style="padding:8px 12px;margin-bottom:12px">${ceoNoticesForTrainer.map(m => `<div class="msg" style="margin-bottom:4px;font-size:.8rem"><b>📣 Recado do CEO:</b> ${esc(m.text)} <span class="mut">(${fmtDate(m.date.slice(0, 10))})</span></div>`).join('')}</div>` : ''}
+      ` : ''}
 
-    ${isCeo() ? `<div class="card" style="margin-top:10px;background:linear-gradient(135deg,#192b0c,#13191d);border-color:var(--gold)">
-      <div class="row sp">
-        <div>
-          <h2 style="margin-bottom:4px">📋 Controle de Alunos Sem Personal & Modo Aluno</h2>
-          <p class="mut">Gerencie os alunos que montam treino automático pelo Relatório de Objetivos e pagam mensalidade direto sem precisar de personal.</p>
+      ${isCeo() ? `
+      <div class="card" style="padding:10px 14px;margin-bottom:12px;background:linear-gradient(135deg,#162410,#12181c);border-color:rgba(143,255,0,.3)">
+        <div class="row sp" style="gap:8px;flex-wrap:wrap">
+          <div>
+            <b>📋 Alunos Sem Personal:</b> <span class="gold">${autos.length} aluno(s)</span> treinam pelo gerador automático e pagam direto à sua conta.
+          </div>
+          <div class="row" style="gap:6px">
+            <button class="btn sm" onclick="go('autostudents')">Ver Alunos Sem Personal</button>
+            <button class="btn ghost sm" onclick="toggleCeoStudentMode(true)">🏃 Modo Aluno</button>
+          </div>
         </div>
-        <div class="row">
-          <button class="btn" onclick="go('autostudents')">Alunos Sem Personal (${autos.length})</button>
-          <button class="btn ghost" onclick="toggleCeoStudentMode(true)">🏃 Entrar como Apenas Aluno</button>
+      </div>` : ''}
+
+      <div class="grid2" style="gap:12px;margin-top:4px">
+        <!-- Coluna 1: Frequência Semanal & Respostas de Hoje -->
+        <div class="card" style="margin:0">
+          <div class="row sp" style="margin-bottom:8px">
+            <h2 style="font-size:1.05rem;margin:0">📊 Frequência da Semana</h2>
+            <span class="mut" style="font-size:.76rem">${tr.length} treinaram hoje</span>
+          </div>
+          ${barChart(wk)}
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid #222a30">
+            <b style="font-size:.8rem;color:#cbd5e1">Check-ins dos Alunos Hoje:</b>
+            ${ck.length ? ck.slice(0, 4).map(c => `<div class="msg" style="margin-top:4px;padding:4px 8px;font-size:.78rem"><b>${esc(student(c.uid)?.name)}</b> — Dia: ${esc(c.mood || '—')} · Treinou: ${esc(c.trained || '—')}</div>`).join('') : '<p class="mut" style="font-size:.78rem;margin:4px 0 0">Nenhum check-in registrado hoje.</p>'}
+          </div>
+        </div>
+
+        <!-- Coluna 2: Alunos Ausentes (+3 dias) -->
+        <div class="card" style="margin:0">
+          <div class="row sp" style="margin-bottom:8px">
+            <h2 style="font-size:1.05rem;margin:0">⚠️ Alunos Ausentes (+3 dias)</h2>
+            <span class="badge ${away.length ? 'warn' : 'ok'}" style="font-size:.7rem">${away.length} aluno(s)</span>
+          </div>
+          ${away.length ? away.slice(0, 6).map(s => `
+            <div class="row sp" style="padding:6px 0;border-bottom:1px solid #1e262c;font-size:.8rem">
+              <div>
+                <b>${esc(s.name)}</b>
+                <div class="mut" style="font-size:.72rem">${daysSince(s.id) > 100 ? 'Nunca treinou' : daysSince(s.id) + ' dias sem treinar'}</div>
+              </div>
+              <div class="row" style="gap:4px">
+                ${s.phone ? `<a class="btn sm ghost" target="_blank" rel="noopener" href="${waUrl(s.phone)}" title="Chamar no WhatsApp" style="padding:2px 7px;font-size:.7rem">💬 WhatsApp</a>` : ''}
+                <button class="btn sm ghost" onclick="sendMsg('${s.id}','Sentimos sua falta! Bora treinar hoje? 💪');toast('Aviso enviado!')" style="padding:2px 7px;font-size:.7rem">Cobrar</button>
+              </div>
+            </div>
+          `).join('') : '<p class="mut" style="font-size:.8rem;padding:16px 0;text-align:center">Todos os alunos estão com os treinos em dia! 🎉</p>'}
         </div>
       </div>
-    </div>` : ''}
-
-    <div class="grid" style="margin:14px 0">
-      ${isCeo() ? `<div class="card stat" style="cursor:pointer" onclick="go('trainers')"><b>${trs.length}</b><span>Professores (Mini CEOs)</span></div>` : ''}
-      ${isCeo() ? `<div class="card stat" style="cursor:pointer" onclick="go('autostudents')"><b>${autos.length}</b><span>Alunos Sem Personal</span></div>` : ''}
-      <div class="card stat" style="cursor:pointer" onclick="go('students')"><b>${st.length}</b><span>${isCeo() ? 'Total de Alunos' : 'Meus Alunos'}</span></div>
-      <div class="card stat"><b>${act.length}</b><span>Alunos ativos</span></div>
-      <div class="card stat"><b>${tr.length}</b><span>Treinaram hoje</span></div>
-      <div class="card stat"><b>${away.length}</b><span>Sem treinar +3 dias</span></div>
-      <div class="card stat"><b>${goals.length}</b><span>Metas de água batidas</span></div>
-    </div>
-    <div class="grid2">
-      <div class="card"><h2>Frequência semanal</h2>${barChart(wk)}</div>
-      <div class="card"><h2>⚠️ Alunos ausentes (+3 dias)</h2>${away.length ? away.map(s => `<div class="row sp" style="padding:6px 0;border-bottom:1px solid #222a30"><span><b>${esc(s.name)}</b> <span class="mut">(${daysSince(s.id) > 100 ? 'nunca treinou' : daysSince(s.id) + ' dias'})</span></span><div class="row">${s.phone ? `<a class="btn sm ghost" target="_blank" rel="noopener" href="${waUrl(s.phone)}">WhatsApp</a>` : ''}<button class="btn sm ghost" onclick="sendMsg('${s.id}','Sentimos sua falta! Bora treinar hoje? 💪');toast('Aviso enviado!')">Cobrar no app</button></div></div>`).join('') : '<p class="mut">Todos os alunos estão em dia 🎉</p>'}</div>
-    </div>
-    <div class="card"><h2>Respostas dos alunos hoje</h2>${ck.length ? ck.map(c => `<div class="msg"><b>${esc(student(c.uid)?.name)}</b> — Dia: ${esc(c.mood || '—')} · Treinou: ${esc(c.trained || '—')}</div>`).join('') : '<p class="mut">Nenhum check-in registrado hoje.</p>'}</div>`;
+    `;
   },
 
   /* --- ABA FINANCEIRO COMPLETA (CEO & PROFESSOR MINI CEO) --- */
@@ -1604,20 +1664,22 @@ const ADMIN = {
     const allUsers = DB.users.filter(u => u.id !== S.user.id);
     return `<div class="row sp">
       <div>
-        <h1>Alunos Sem Personal & Controle de Acesso</h1>
-        <p class="mut">Controle total dos alunos que respondem o <b>Relatório de Objetivos</b> para gerar treino automático e pagam a mensalidade diretamente sem precisar do personal.</p>
+        <h1>Alunos Sem Personal & Perfis (${list.length})</h1>
+        <p class="mut">Alunos do treino automático e controle de perfil (Aluno vs Professor).</p>
       </div>
       <div class="row">
-        <button class="btn ghost" onclick="S.finTab='auto';go('finance')">💰 Financeiro Sem Personal</button>
-        <button class="btn ghost" onclick="toggleCeoStudentMode(true)">🏃 Ver como Apenas Aluno</button>
-        <button class="btn" onclick="studentForm(null, true)">${ic('plus')}Novo Aluno (Sem Personal)</button>
+        <button class="btn ghost sm" onclick="S.finTab='auto';go('finance')">💰 Financeiro</button>
+        <button class="btn ghost sm" onclick="toggleCeoStudentMode(true)">🏃 Modo Aluno</button>
+        <button class="btn ok-btn sm" onclick="studentForm(null, true)">${ic('plus')}Novo Aluno</button>
       </div>
     </div>
 
-    <div class="card" style="margin-top:14px;border-color:var(--gold)">
-      <h2>🔀 Controle de Perfil: Definir quem é "Apenas Aluno" vs "Professor (Mini CEO)"</h2>
-      <p class="mut" style="margin-bottom:10px">Defina o perfil de cada conta cadastrada. O <b>Professor</b> atua como um Mini CEO (cadastra alunos, monta treinos e tem aba Financeiro própria).</p>
-      <div style="display:grid;gap:8px">
+    <div class="card" style="margin-top:10px;border-color:rgba(143,255,0,.35)">
+      <div class="row sp" style="margin-bottom:8px">
+        <b style="font-size:.92rem;color:var(--gold)">🔀 Perfis: Aluno vs Professor</b>
+        <span class="mut" style="font-size:.75rem">${allUsers.length} usuários</span>
+      </div>
+      <div style="display:grid;gap:6px">
         ${allUsers.map(u => {
           const isOnlyStudent = u.role === 'student';
           const isAuto = u.role === 'student' && (u.autonomous || !u.trainerId);
@@ -2056,50 +2118,34 @@ function renderFinanceView() {
   const bank = getBankAccountConfig();
   const myDefaultFee = isTrainer() ? (DB.settings?.[S.user.id]?.defaultStudentFee || defs.trainerStudentFee) : defs.autoStudentFee;
 
-  return `<div class="row sp">
-    <div>
-      <h1>💰 Financeiro, Pagamentos no App & Inadimplência</h1>
-      <p class="mut">${isCeo() ? 'Gerencie os pagamentos dos Professores, dos Alunos Sem Personal, reajustes e a Conta Bancária onde cai o dinheiro.' : `Painel Financeiro do Prof. ${esc(S.user?.name || '')}: controle quem já pagou, quem falta pagar, datas a vencer e cadastre novos alunos.`}</p>
-    </div>
-    <div class="row">
-      ${isCeo() ? `<button class="btn" onclick="openBankAccountModal()">🏦 Conta Bancária de Recebimento</button>` : `<button class="btn ok-btn" onclick="openInAppPaymentModal('${S.user.id}')">💳 Pagar Minha Assinatura no App</button>`}
-      <button class="btn ghost" onclick="openBulkAdjustmentModal()">📈 Fazer Reajuste</button>
-      ${isCeo() ? `<button class="btn ghost" onclick="trainerForm()">${ic('plus')}Novo Professor</button><button class="btn ghost" onclick="studentForm(null, true)">${ic('plus')}Aluno Sem Personal</button>` : `<button class="btn ok-btn" onclick="studentForm()">${ic('plus')}Cadastrar Novo Aluno</button>`}
-      <button class="btn ghost sm" onclick="exportFinanceReportModal()">${ic('download')}Exportar</button>
+  return `
+  <!-- Topo Financeiro Limpo & Ações -->
+  <div class="dash-hero">
+    <div class="row sp" style="gap:10px;flex-wrap:wrap;align-items:center">
+      <div>
+        <div class="row" style="gap:8px;align-items:center">
+          <h1 style="margin:0;font-size:1.45rem">💰 Financeiro & Cobranças</h1>
+          <span class="role-pill" style="font-size:.68rem">${isCeo() ? '👑 CEO' : '👨‍🏫 Personal'}</span>
+        </div>
+        <div class="mut" style="font-size:.82rem;margin-top:2px">${isCeo() ? 'Controle de mensalidades dos professores e alunos sem personal' : `Controle de mensalidades e recebimentos do Prof. ${esc(S.user?.name || '')}`}</div>
+      </div>
+      <div class="row" style="gap:6px;flex-wrap:wrap">
+        ${isCeo() ? `<button class="btn sm" onclick="openBankAccountModal()">🏦 Conta Bancária / PIX</button>` : `<button class="btn ok-btn sm" onclick="openInAppPaymentModal('${S.user.id}')">💳 Pagar Minha Assinatura</button>`}
+        <button class="btn ghost sm" onclick="openBulkAdjustmentModal()">📈 Reajuste</button>
+        ${isCeo() ? `<button class="btn ok-btn sm" onclick="trainerForm()">${ic('plus')}Professor</button><button class="btn ok-btn sm" onclick="studentForm(null, true)">${ic('plus')}Aluno Sem Personal</button>` : `<button class="btn ok-btn sm" onclick="studentForm()">${ic('plus')}Novo Aluno</button>`}
+        <button class="btn ghost sm" onclick="exportFinanceReportModal()">${ic('download')}Exportar</button>
+      </div>
     </div>
   </div>
 
-  <!-- Card da Conta Bancária de Recebimento (Exclusivo CEO para configurar onde cai o dinheiro) -->
-  ${isCeo() ? `<div class="card" style="margin-top:12px;background:linear-gradient(135deg,#12241c,#13191d);border-color:var(--gold)">
-    <div class="row sp">
-      <div style="flex:1;min-width:250px">
-        <div class="row" style="gap:8px;margin-bottom:4px">
-          <h2 style="margin:0">🏦 Conta Bancária de Destino (Recebimento de Alunos e Professores)</h2>
-          <span class="fin-badge paid">Ativa p/ PIX, Crédito e Débito</span>
-        </div>
-        <p class="mut" style="margin-bottom:6px">Todos os pagamentos feitos no aplicativo por <b>Alunos</b> e <b>Professores</b> via <b>PIX</b>, <b>Cartão de Crédito</b> ou <b>Cartão de Débito</b> caem diretamente nesta conta:</p>
-        <div class="grid" style="font-size:.83rem;gap:8px">
-          <div style="background:#0d1317;padding:8px 10px;border-radius:10px;border:1px solid #222e36">
-            <span class="mut">Instituição / Banco</span><br>
-            <b>${esc(bank.bankName)}</b> <span class="mut">(${esc(bank.accountType)})</span>
-          </div>
-          <div style="background:#0d1317;padding:8px 10px;border-radius:10px;border:1px solid #222e36">
-            <span class="mut">Agência e Conta</span><br>
-            <b>Ag: ${esc(bank.agency)} · Conta: ${esc(bank.accountNumber)}</b>
-          </div>
-          <div style="background:#0d1317;padding:8px 10px;border-radius:10px;border:1px solid #222e36">
-            <span class="mut">Titular / Favorecido</span><br>
-            <b class="gold">${esc(bank.holderName)}</b> <span class="mut">(${esc(bank.holderDoc)})</span>
-          </div>
-          <div style="background:#0d1317;padding:8px 10px;border-radius:10px;border:1px solid #222e36">
-            <span class="mut">Chave PIX (${esc(bank.pixKeyType)})</span><br>
-            <b class="gold">${esc(bank.pixKey)}</b>
-          </div>
-        </div>
+  <!-- Conta Bancária (Exclusivo CEO, compacta) -->
+  ${isCeo() ? `
+  <div class="card" style="padding:10px 14px;margin-bottom:10px;background:linear-gradient(135deg,#12241c,#13191d);border-color:rgba(143,255,0,.3)">
+    <div class="row sp" style="gap:8px;flex-wrap:wrap">
+      <div>
+        <b>🏦 Conta de Recebimento:</b> ${esc(bank.bankName)} · Ag ${esc(bank.agency)} Conta ${esc(bank.accountNumber)} · PIX: <b class="gold">${esc(bank.pixKey)}</b> <span class="mut">(${esc(bank.holderName)})</span>
       </div>
-      <div class="row" style="align-self:center">
-        <button class="btn" onclick="openBankAccountModal()">⚙️ Ajustar Conta Bancária / PIX</button>
-      </div>
+      <button class="btn sm ghost" onclick="openBankAccountModal()">⚙️ Configurar</button>
     </div>
   </div>` : ''}
 
@@ -3105,22 +3151,17 @@ async function saveTrainer(e, id) {
   const f = Object.fromEntries(new FormData(e.target));
   const cleanEmail = (f.email || '').trim().toLowerCase();
   const cleanPw = (f.pw || '').trim();
+  if (Cloud.enabled && !id) {
+    try { await Cloud.pullAll({ ids: ['users'], preferRemote: true, silentUiRefresh: true }); } catch { }
+  }
   if (DB.users.some(u => (u.email || '').trim().toLowerCase() === cleanEmail && u.id !== id)) return toast('E-mail já cadastrado.');
   const targetRole = f.accType === 'trainer' ? 'trainer' : 'student';
   const isAuto = f.accType === 'auto_student';
   const trainerId = isAuto ? null : (targetRole === 'student' ? (trainers()[0]?.id || S.user.id) : null);
   let u = id ? userById(id) : null;
   if (!u) {
-    if (Cloud.enabled) {
-      try {
-        const action = targetRole === 'trainer' ? 'createTrainer' : 'createStudent';
-        const r = await Cloud.fn(action, { email: cleanEmail, password: cleanPw, name: f.name.trim(), phone: f.phone || '', trainerId });
-        u = { id: r.id, role: targetRole, autonomous: isAuto, trainerId, active: true };
-      } catch (err) { return toast(err.message); }
-    } else {
-      const salt = uid() + uid();
-      u = { id: uid(), role: targetRole, autonomous: isAuto, trainerId, active: true, salt, hash: await hash(cleanPw, salt), plainPw: cleanPw };
-    }
+    const salt = uid() + uid();
+    u = { id: uid(), role: targetRole, autonomous: isAuto, trainerId, active: true, salt, hash: await hash(cleanPw, salt), plainPw: cleanPw, createdAt: Date.now() };
     DB.users.push(u);
     if (targetRole === 'student') DB.workouts[u.id] = [];
   } else {
@@ -3129,13 +3170,9 @@ async function saveTrainer(e, id) {
     if (isAuto || targetRole === 'trainer') u.trainerId = null;
     if (targetRole === 'student' && !DB.workouts[u.id]) DB.workouts[u.id] = [];
     if (cleanPw) {
-      if (Cloud.enabled) {
-        try { await Cloud.fn('resetPassword', { id: u.id, password: cleanPw }); } catch (err) { return toast(err.message); }
-      } else {
-        u.salt = uid() + uid();
-        u.hash = await hash(cleanPw, u.salt);
-        u.plainPw = cleanPw;
-      }
+      u.salt = uid() + uid();
+      u.hash = await hash(cleanPw, u.salt);
+      u.plainPw = cleanPw;
     }
   }
   Object.assign(u, { name: f.name.trim(), email: cleanEmail, phone: (f.phone || '').trim(), notes: (f.notes || '').trim(), updatedAt: Date.now() });
@@ -3151,16 +3188,31 @@ async function saveTrainer(e, id) {
     u.finance.history = u.finance.history || [];
     if (!u.finance.history.length) u.finance.history.push({ id: uid(), date: day(), amount: u.finance.amount, method: u.finance.method, note: 'Pagamento inicial no cadastro' });
   }
-  save(); closeModal(); render();
-  toast(targetRole === 'student' ? 'Conta de Aluno salva e sincronizada ✅' : 'Professor (Mini CEO) salvo com sucesso ✅');
+  Cloud.markUserDirty?.(u.id);
+  save();
+  let cloudOk = true;
+  if (Cloud.enabled) {
+    toast('Sincronizando conta na nuvem...');
+    cloudOk = await Cloud.syncNow(false);
+  }
+  closeModal(); render();
+  if (Cloud.enabled && !cloudOk) {
+    toast('⚠️ Salvo localmente. Sem conexão com a nuvem no momento — sincronizará ao reconectar.');
+  } else {
+    toast(targetRole === 'student'
+      ? `Conta de Aluno salva${Cloud.enabled ? ' na nuvem! Já pode entrar no celular dele ☁️' : ''} ✅`
+      : `Professor salvo${Cloud.enabled ? ' na nuvem! Já pode entrar no celular dele ☁️' : ''} ✅`);
+  }
 }
 async function delTrainer(id) {
   const hasStudents = DB.users.some(u => u.role === 'student' && u.trainerId === id);
   if (hasStudents) return toast('Este professor ainda possui alunos vinculados. Transfira ou exclua os alunos antes.');
   if (!confirm('Excluir este professor?')) return;
-  if (Cloud.enabled) { try { await Cloud.fn('delete', { id }); } catch (err) { return toast(err.message); } }
+  Cloud.markDeleted?.('users', id);
   DB.users = DB.users.filter(u => u.id !== id);
-  save(); render(); toast('Professor excluído');
+  save();
+  if (Cloud.enabled) await Cloud.syncNow(false);
+  render(); toast('Professor excluído');
 }
 
 /* ---------- Cadastro / Edição de Alunos (com Mensalidade, Vencimento e Status Financeiro) ---------- */
@@ -3242,6 +3294,9 @@ async function saveStudent(e, id) {
   const finPaidVal = typeof f.finPaid === 'object' ? f.finPaid?.value : f.finPaid;
   const finMethodVal = typeof f.finMethod === 'object' ? f.finMethod?.value : f.finMethod;
 
+  if (Cloud.enabled && !id) {
+    try { await Cloud.pullAll({ ids: ['users'], preferRemote: true, silentUiRefresh: true }); } catch { }
+  }
   if (DB.users.some(u => (u.email || '').trim().toLowerCase() === cleanEmail && u.id !== id)) return toast('E-mail já cadastrado.');
   if (isCeo() && trainerIdVal === '__make_trainer__') {
     const fakeForm = e.target;
@@ -3254,26 +3309,17 @@ async function saveStudent(e, id) {
   const trainerId = isAuto ? null : (isCeo() ? (trainerIdVal || S.user.id) : S.user.id);
   let u = id ? userById(id) : null;
   if (!u) {
-    if (Cloud.enabled) {
-      try { const r = await Cloud.fn('createStudent', { email: cleanEmail, password: cleanPw, name: nameVal, phone: phoneVal, trainerId }); u = { id: r.id, role: 'student', active: true, trainerId, autonomous: isAuto }; }
-      catch (err) { return toast(err.message); }
-    } else {
-      const salt = uid() + uid();
-      u = { id: uid(), role: 'student', active: true, trainerId, autonomous: isAuto, salt, hash: await hash(cleanPw, salt), plainPw: cleanPw };
-    }
+    const salt = uid() + uid();
+    u = { id: uid(), role: 'student', active: true, trainerId, autonomous: isAuto, salt, hash: await hash(cleanPw, salt), plainPw: cleanPw, createdAt: Date.now() };
     DB.users.push(u); DB.workouts[u.id] = [];
   } else {
     u.role = 'student';
     u.autonomous = isAuto;
     u.trainerId = trainerId;
     if (cleanPw) {
-      if (Cloud.enabled) {
-        try { await Cloud.fn('resetPassword', { id: u.id, password: cleanPw }); } catch (err) { return toast(err.message); }
-      } else {
-        u.salt = uid() + uid();
-        u.hash = await hash(cleanPw, u.salt);
-        u.plainPw = cleanPw;
-      }
+      u.salt = uid() + uid();
+      u.hash = await hash(cleanPw, u.salt);
+      u.plainPw = cleanPw;
     }
   }
   Object.assign(u, { name: nameVal, email: cleanEmail, phone: phoneVal, age: +ageVal || null, height: +heightVal || null, weight: +weightVal || null, goal: goalVal, injuries: injuriesVal, notes: notesVal, updatedAt: Date.now() });
@@ -3290,20 +3336,38 @@ async function saveStudent(e, id) {
     if (!u.finance.history.length) u.finance.history.push({ id: uid(), date: day(), amount: u.finance.amount, method: u.finance.method, note: 'Pagamento inicial no cadastro' });
   }
   if (weightVal && !id) DB.weights.push({ id: uid(), uid: u.id, date: day(), kg: +weightVal });
-  save(); closeModal(); render();
-  toast(isAuto ? 'Aluno Sem Personal salvo com sucesso ✅' : (isTrainer() ? `Aluno cadastrado com sucesso para o Prof. ${S.user.name} ✅` : 'Aluno salvo com sucesso ✅'));
+  Cloud.markUserDirty?.(u.id);
+  save();
+  let cloudOk = true;
+  if (Cloud.enabled) {
+    toast('Sincronizando aluno na nuvem...');
+    cloudOk = await Cloud.syncNow(false);
+  }
+  closeModal(); render();
+  if (Cloud.enabled && !cloudOk) {
+    toast('⚠️ Aluno salvo localmente. Sem conexão com a nuvem no momento — sincronizará ao reconectar.');
+  } else {
+    const cloudTag = Cloud.enabled ? ' na nuvem! Já pode entrar no celular dele ☁️' : '';
+    toast(isAuto ? `Aluno Sem Personal salvo${cloudTag} ✅` : (isTrainer() ? `Aluno cadastrado para o Prof. ${S.user.name}${cloudTag} ✅` : `Aluno salvo${cloudTag} ✅`));
+  }
 }
 const toggleUserActive = async id => {
   const u = userById(id); if (!u) return;
-  if (Cloud.enabled) { try { await Cloud.fn('setActive', { id, active: !u.active }); } catch (err) { return toast(err.message); } }
-  u.active = !u.active; save(); render();
+  u.active = !u.active;
+  u.updatedAt = Date.now();
+  Cloud.markUserDirty?.(u.id);
+  save();
+  if (Cloud.enabled) await Cloud.syncNow(false);
+  render();
 };
 const delStudent = async id => {
   if (!confirm('Excluir aluno e todos os dados dele?')) return;
-  if (Cloud.enabled) { try { await Cloud.fn('delete', { id }); } catch (err) { return toast(err.message); } }
+  Cloud.markDeleted?.('users', id);
   DB.users = DB.users.filter(u => u.id !== id); delete DB.workouts[id];
   ['checkins', 'water', 'logs', 'cardio', 'weights'].forEach(k => DB[k] = DB[k].filter(x => x.uid !== id));
-  save(); render(); toast('Aluno excluído');
+  save();
+  if (Cloud.enabled) await Cloud.syncNow(false);
+  render(); toast('Aluno excluído');
 };
 function msgForm(to) {
   const targets = isCeo() ? [...trainers(), ...students()] : students();
@@ -4346,69 +4410,124 @@ const STUDENT = {
     const away = daysSince(id), q = QUOTES[new Date().getDate() % QUOTES.length], goal = waterGoal(curWeight(id)), wToday = waterToday(id);
     const wHist = my('weights').sort((a, b) => a.date.localeCompare(b.date)).slice(-8).map(x => ({ l: fmtDate(x.date).slice(0, 5), v: x.kg }));
     const fst = s.role === 'student' ? finStatus(s) : null;
-    return `<div class="row sp">
-      <div>
-        <h1>${greet()}, ${esc(s.name.split(' ')[0])}! 💪</h1>
-        <p class="mut">“${q}”</p>
-      </div>
-      <div class="row">
-        <button class="btn sm ghost" onclick="go('water')">💧 Água (${Math.min(100, Math.round(wToday / goal * 100))}%)</button>
-        <button class="btn sm ghost" onclick="go('cardio')">⏱️ Cárdio</button>
-      </div>
-    </div>
+    const myWorkouts = DB.workouts[id] || [];
 
-    ${away > 2 && away < 999 ? `<div class="banner" style="margin-top:10px">😢 Sentimos sua falta! Bora treinar hoje? Último treino há ${away} dias.</div>` : ''}
-
-    <div class="card row" style="margin-top:12px">
-      ${s.photo ? `<img class="avatar" src="${s.photo}" alt="">` : `<div class="avatar">${esc(s.name[0])}</div>`}
-      <div style="flex:1">
-        <b>${esc(s.name)}</b> <span class="role-pill">${s.autonomous || !s.trainerId ? '🤖 Treino Automático (Sem Personal)' : '🏋️ Aluno'}</span>
-        <div class="mut">${esc(s.email)} ${s.phone ? '· 📞 ' + esc(s.phone) : ''}</div>
-        <div class="mut">Modalidade: <b class="gold">${esc(trainerName(s.trainerId, s))}</b></div>
-      </div>
-      <label class="btn ghost sm" style="margin:0;cursor:pointer">Trocar foto<input type="file" accept="image/*" hidden onchange="setPhoto(this.files[0])"></label>
-    </div>
-
-    ${fst ? `<div class="card" style="border-left:4px solid ${fst.code === 'overdue' ? '#f87171' : fst.code === 'paid' ? '#4ade80' : '#fbbf24'}">
-      <div class="row sp">
-        <div>
-          <b>💰 Minha Mensalidade (${s.autonomous || !s.trainerId ? 'Plano App Sem Personal' : 'Acompanhamento Personal'}):</b>
-          <span class="fin-badge ${fst.badgeClass}" style="margin-left:6px">${fst.label}</span>
-          <div class="mut" style="margin-top:3px">Valor: <b class="gold">${fmtBRL(fst.amount)}</b> (${esc(fst.cycle)} · ${esc(fst.method)}) · 📅 ${esc(fst.detailText)}</div>
+    return `
+      <!-- Header do Aluno -->
+      <div class="dash-hero">
+        <div class="row sp" style="gap:10px;flex-wrap:wrap;align-items:center">
+          <div class="row" style="gap:10px">
+            ${s.photo ? `<img class="avatar" src="${s.photo}" alt="">` : `<div class="avatar">${esc(s.name[0])}</div>`}
+            <div>
+              <div class="row" style="gap:6px;align-items:center">
+                <h1 style="margin:0;font-size:1.35rem">${greet()}, ${esc(s.name.split(' ')[0])}! 💪</h1>
+                <span class="role-pill" style="font-size:.68rem">${s.autonomous || !s.trainerId ? '🤖 Treino Auto' : '🏋️ Aluno'}</span>
+              </div>
+              <div class="mut" style="font-size:.8rem;margin-top:2px">Personal: <b class="gold">${esc(trainerName(s.trainerId, s))}</b></div>
+            </div>
+          </div>
+          <div class="row" style="gap:6px">
+            <button class="btn ok-btn sm" onclick="go('workout')">🏋️ Ir para Meu Treino</button>
+            <label class="btn ghost sm" style="margin:0;cursor:pointer">Foto<input type="file" accept="image/*" hidden onchange="setPhoto(this.files[0])"></label>
+          </div>
         </div>
-        <div class="row">
-          <button class="btn sm ok-btn" onclick="openInAppPaymentModal('${s.id}')">💳 Pagar pelo App (PIX, Crédito ou Débito)</button>
+      </div>
+
+      ${away > 2 && away < 999 ? `<div class="banner" style="margin-bottom:10px">😢 Sentimos sua falta! Bora treinar hoje? Último treino registrado há ${away} dias.</div>` : ''}
+
+      <!-- 4 Pílulas de Saúde & Consistência -->
+      <div class="metric-strip">
+        <div class="metric-card" onclick="go('workout')" title="Ver treino">
+          <span class="metric-label">🔥 Frequência</span>
+          <b class="metric-val gold">${streak(id)}</b>
+          <span class="metric-sub">dias seguidos</span>
+        </div>
+        <div class="metric-card" onclick="go('workout')" title="Ver treinos realizados">
+          <span class="metric-label">🏋️ Treinos Feitos</span>
+          <b class="metric-val" style="color:#4ade80">${my('logs').length}</b>
+          <span class="metric-sub">${myWorkouts.length} ficha(s) disponíveis</span>
+        </div>
+        <div class="metric-card" onclick="go('water')" title="Beber água">
+          <span class="metric-label">💧 Água Hoje</span>
+          <b class="metric-val" style="color:#38bdf8">${wToday} ml</b>
+          <span class="metric-sub">Meta: ${goal} ml (${Math.min(100, Math.round(wToday / goal * 100))}%)</span>
+        </div>
+        <div class="metric-card" onclick="go('inbody')" title="InBody e Peso">
+          <span class="metric-label">⚖️ Peso Atual</span>
+          <b class="metric-val">${curWeight(id)} kg</b>
+          <span class="metric-sub">Altura: ${s.height || '—'} cm</span>
+        </div>
+      </div>
+
+      <!-- Card de Ação Rápida: Treino do Dia -->
+      <div class="card row sp" style="padding:12px 14px;background:linear-gradient(135deg,#152512,#12171b);border-color:var(--gold);margin-bottom:12px">
+        <div>
+          <b style="font-size:1.05rem;color:#fff">🏋️ Seu Treino do Dia está pronto!</b>
+          <div class="mut" style="font-size:.8rem;margin-top:2px">Acesse sua ficha, anote suas cargas da semana e acompanhe sua evolução em tempo real.</div>
+        </div>
+        <button class="btn ok-btn" onclick="go('workout')">▶ Começar Treino</button>
+      </div>
+
+      ${fst ? `
+      <div class="card row sp" style="padding:10px 14px;margin-bottom:12px;border-left:4px solid ${fst.code === 'overdue' ? '#f87171' : fst.code === 'paid' ? '#4ade80' : '#fbbf24'}">
+        <div>
+          <b>💰 Mensalidade:</b> <span class="fin-badge ${fst.badgeClass}" style="margin-left:4px">${fst.label}</span>
+          <div class="mut" style="font-size:.78rem;margin-top:2px">${fmtBRL(fst.amount)} · ${esc(fst.detailText)}</div>
+        </div>
+        <div class="row" style="gap:6px">
+          <button class="btn sm ok-btn" onclick="openInAppPaymentModal('${s.id}')">💳 Pagar no App</button>
           <button class="btn sm ghost" onclick="openFinHistoryModal('${s.id}')">📜 Comprovantes</button>
         </div>
-      </div>
-    </div>` : ''}
+      </div>` : ''}
 
-    <div class="grid" style="margin:14px 0">
-      <div class="card stat"><b>🔥 ${streak(id)}</b><span>dias seguidos</span></div>
-      <div class="card stat"><b>${my('logs').length}</b><span>treinos feitos</span></div>
-      <div class="card stat" style="cursor:pointer" onclick="go('water')"><b>${wToday}/${goal}ml</b><span>água hoje (+ beber)</span></div>
-      <div class="card stat"><b>${curWeight(id)} kg</b><span>peso (${s.height || '—'} cm)</span></div>
-    </div>
-
-    <div class="card" style="border-color:var(--gold)">
-      <div class="row sp">
-        <div>
-          <h2 style="margin-bottom:2px">📋 Meu Relatório de Objetivos (Treino Automático)</h2>
-          <p class="mut">Não tem condições de pagar um personal trainer? O aplicativo analisa seu histórico, nível, lesões e metas para montar seu treino sozinho!</p>
+      <!-- Check-in Rápido de Humor e Treino em 1 Bloco -->
+      <div class="grid2" style="gap:10px;margin-bottom:12px">
+        <div class="card" style="margin:0">
+          <h3 style="font-size:.9rem;margin-bottom:6px">Como está seu dia hoje?</h3>
+          <div class="row" style="gap:5px;flex-wrap:wrap">
+            ${MOODS.map(m => `<button class="chip ${c.mood === m[1] ? 'on' : ''}" style="padding:4px 9px;font-size:.78rem" onclick="setCheckin('mood','${m[1]}')">${m[0]} ${m[1]}</button>`).join('')}
+          </div>
         </div>
-        <button class="btn" onclick="openGoalReportModal('${s.id}')">${s.report ? '📋 Atualizar Relatório / Remontar Treino' : '⚡ Responder Relatório e Gerar Meu Treino'}</button>
+        <div class="card" style="margin:0">
+          <h3 style="font-size:.9rem;margin-bottom:6px">Você já treinou hoje?</h3>
+          <div class="row" style="gap:5px;flex-wrap:wrap">
+            ${TRAINED.map(t => `<button class="chip ${c.trained === t[0] ? 'on' : ''}" style="padding:4px 9px;font-size:.78rem" onclick="setCheckin('trained','${t[0]}')">${t[1]}</button>`).join('')}
+          </div>
+        </div>
       </div>
-      ${s.report ? renderReportSummaryHtml(s.report) : ''}
-    </div>
 
-    <div class="grid2">
-      <div class="card"><h3>Como está o seu dia hoje?</h3><div class="row" style="margin-top:10px">${MOODS.map(m => `<button class="chip ${c.mood === m[1] ? 'on' : ''}" onclick="setCheckin('mood','${m[1]}')">${m[0]} ${m[1]}</button>`).join('')}</div></div>
-      <div class="card"><h3>Você já treinou hoje?</h3><div class="row" style="margin-top:10px">${TRAINED.map(t => `<button class="chip ${c.trained === t[0] ? 'on' : ''}" onclick="setCheckin('trained','${t[0]}')">${t[1]}</button>`).join('')}</div></div>
-    </div>
+      <!-- Relatório de Objetivos (Resumo Limpo) -->
+      <div class="card" style="margin-bottom:12px">
+        <div class="row sp" style="gap:8px;flex-wrap:wrap">
+          <div>
+            <h2 style="font-size:1.02rem;margin:0">📋 Relatório de Objetivos</h2>
+            <div class="mut" style="font-size:.78rem;margin-top:2px">Avaliação física, nível e metas para montagem da ficha de treino adaptada.</div>
+          </div>
+          <button class="btn sm ghost" onclick="openGoalReportModal('${s.id}')">📋 ${s.report ? 'Ver / Ajustar Relatório' : 'Preencher Relatório'}</button>
+        </div>
+        ${s.report ? `<div style="margin-top:8px">${renderReportSummaryHtml(s.report)}</div>` : ''}
+      </div>
 
-    <div class="card"><h2>Evolução do peso</h2>${lineChart(wHist)}<form class="row" style="margin-top:10px" onsubmit="event.preventDefault();setWeight(+this.kg.value)"><input name="kg" type="number" step="0.1" placeholder="Registrar novo peso (kg)" required style="flex:1"><button class="btn">Registrar peso</button></form></div>
-    <div class="card"><h2>🏅 Conquistas</h2><div class="badges">${badges(id).map(b => `<span class="bdg ${b[1] ? '' : 'off'}">${b[0]}</span>`).join('')}</div></div>
-    <div class="card"><h2>📣 Recados e Avisos</h2>${msgs.map(m => `<div class="msg"><span class="mut">${new Date(m.date).toLocaleDateString('pt-BR')}</span><br>${esc(m.text)}</div>`).join('') || '<p class="mut">Sem recados no momento.</p>'}</div>`;
+      <!-- Histórico de Peso & Conquistas -->
+      <div class="grid2" style="gap:10px;margin-bottom:12px">
+        <div class="card" style="margin:0">
+          <h2 style="font-size:1.02rem;margin-bottom:6px">Evolução do Peso (kg)</h2>
+          ${lineChart(wHist)}
+          <form class="row" style="margin-top:8px;gap:6px" onsubmit="event.preventDefault();setWeight(+this.kg.value)">
+            <input name="kg" type="number" step="0.1" placeholder="Novo peso (kg)" required style="flex:1;min-height:34px;height:34px;font-size:.82rem">
+            <button class="btn sm" style="min-height:34px;height:34px">Salvar</button>
+          </form>
+        </div>
+        <div class="card" style="margin:0">
+          <h2 style="font-size:1.02rem;margin-bottom:6px">🏅 Conquistas & Avisos</h2>
+          <div class="badges">${badges(id).map(b => `<span class="bdg ${b[1] ? '' : 'off'}">${b[0]}</span>`).join('')}</div>
+          <div style="margin-top:10px;padding-top:8px;border-top:1px solid #222a30">
+            <b style="font-size:.8rem;color:#cbd5e1">📣 Avisos do Personal:</b>
+            ${msgs.map(m => `<div class="msg" style="margin-top:4px;padding:4px 8px;font-size:.76rem"><span class="mut">${new Date(m.date).toLocaleDateString('pt-BR')}:</span> ${esc(m.text)}</div>`).join('') || '<p class="mut" style="font-size:.76rem;margin:4px 0 0">Sem recados no momento.</p>'}
+          </div>
+        </div>
+      </div>
+    `;
   },
   workout() {
     return renderStudentWorkoutModule(S.user.id, false);
@@ -6091,19 +6210,85 @@ function applySyncTextForm(e) {
   }
 }
 
+const SUPABASE_SCHEMA_SQL = `create table if not exists public.personalhub_sync (
+  id text primary key,
+  data jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on table public.personalhub_sync to anon, authenticated;
+
+alter table public.personalhub_sync enable row level security;
+
+drop policy if exists "personalhub_sync_all" on public.personalhub_sync;
+create policy "personalhub_sync_all"
+  on public.personalhub_sync
+  for all
+  to anon, authenticated
+  using (true)
+  with check (true);
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'personalhub_sync'
+  ) then
+    alter publication supabase_realtime add table public.personalhub_sync;
+  end if;
+end $$;`;
+
+function copySupabaseSql() {
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(SUPABASE_SCHEMA_SQL)
+      .then(() => toast('SQL copiado! Cole no SQL Editor do Supabase e clique em RUN ✅'))
+      .catch(() => prompt('Copie o SQL abaixo e rode no SQL Editor do Supabase:', SUPABASE_SCHEMA_SQL));
+  } else {
+    prompt('Copie o SQL abaixo e rode no SQL Editor do Supabase:', SUPABASE_SCHEMA_SQL);
+  }
+}
+
+function downloadReadyConfigJs(urlArg, keyArg) {
+  const cfg = Cloud.getConfig();
+  const u = (urlArg || cfg.url || '').trim();
+  const k = (keyArg || cfg.key || '').trim();
+  if (!u || !k) return toast('Preencha a URL e a Anon Key antes de baixar o config.js.');
+  const content = `// Configuração PersonalHUB — Banco em Nuvem Ativo para TODOS os celulares e redes!
+window.APP_CONFIG = {
+  BRAND_NAME: 'PersonalHUB',
+  SUPABASE_URL: '${u.replace(/'/g, "\\'")}',
+  SUPABASE_ANON_KEY: '${k.replace(/'/g, "\\'")}',
+  GEMINI_API_KEY: '',
+};
+`;
+  downloadFile('config.js', content, 'application/javascript;charset=utf-8');
+  toast('Arquivo config.js baixado! Substitua no GitHub para ativar em todos os celulares ☁️✅');
+}
+
 function openSupabaseModal() {
   const cfg = Cloud.getConfig();
-  modal(`<h2>☁️ Configurar Banco em Nuvem (Supabase)</h2>
-  <p class="mut" style="margin-bottom:12px">Ao conectar o Supabase, tudo o que você cadastrar no computador aparece <b>automaticamente e na hora</b> no celular (e vice-versa), sem precisar exportar arquivos!</p>
+  modal(`<h2>☁️ Banco em Nuvem Multi-Celular (Supabase)</h2>
+  <p class="mut" style="margin-bottom:10px;font-size:.84rem">Com o Supabase conectado, tudo que o <b>CEO</b> cadastrar (Professores) e tudo que o <b>Professor</b> cadastrar (Alunos e Treinos) funciona <b>na hora em qualquer celular e qualquer rede (4G, 5G ou Wi-Fi)</b>!</p>
+  <div class="card" style="padding:10px 12px;margin-bottom:12px;background:#101518;border-color:rgba(143,255,0,.35)">
+    <div class="row sp" style="gap:8px">
+      <div>
+        <b style="font-size:.84rem;color:var(--gold)">Passo 1: Criar tabela no Supabase (1 vez só)</b>
+        <div class="mut" style="font-size:.76rem">No Supabase → <b>SQL Editor</b> → <b>New query</b> → Cole e clique em <b>Run</b>.</div>
+      </div>
+      <button type="button" class="btn sm ghost" onclick="copySupabaseSql()">📋 Copiar SQL</button>
+    </div>
+  </div>
   <form onsubmit="saveSupabaseSettings(event)">
-    <label>Supabase Project URL</label>
-    <input name="url" placeholder="https://seu-projeto.supabase.co" value="${esc(cfg.url)}" required>
+    <label>Passo 2: Supabase Project URL</label>
+    <input id="sbUrlInp" name="url" placeholder="https://seu-projeto.supabase.co" value="${esc(cfg.url)}" required>
     <label>Supabase Anon Public Key</label>
-    <input name="key" type="password" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..." value="${esc(cfg.key)}" required>
-    <p class="mut" style="font-size:.82rem;margin-top:6px">Encontre essas chaves no painel do seu projeto Supabase em <b>Project Settings → API</b>.</p>
-    <div class="row" style="margin-top:14px">
+    <input id="sbKeyInp" name="key" type="password" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..." value="${esc(cfg.key)}" required>
+    <p class="mut" style="font-size:.78rem;margin-top:6px">Encontre essas duas chaves no Supabase em <b>Project Settings → API</b>.</p>
+    <div class="row" style="margin-top:12px;gap:6px;flex-wrap:wrap">
       <button class="btn block" style="flex:1">${ic('check')}Salvar e Conectar Nuvem</button>
-      <button class="btn ghost" type="button" onclick="closeModal()">Cancelar</button>
+      <button class="btn ghost" type="button" onclick="downloadReadyConfigJs($('#sbUrlInp')?.value, $('#sbKeyInp')?.value)" title="Baixe para publicar no GitHub/Render e conectar todos os celulares automaticamente">📄 Baixar config.js</button>
+      <button class="btn ghost" type="button" onclick="closeModal()">Fechar</button>
     </div>
   </form>`);
 }
@@ -6113,18 +6298,18 @@ async function saveSupabaseSettings(e) {
   const url = e.target.url.value.trim();
   const key = e.target.key.value.trim();
   try {
-    toast('Conectando ao Supabase...');
+    toast('Testando e conectando ao Supabase...');
     await Cloud.connect(url, key);
     closeModal();
     render();
-    toast('Nuvem conectada com sucesso! Todos os dados agora estão sincronizados ☁️🎉');
+    toast('☁️ Nuvem conectada! Todos os cadastros sincronizados e prontos em todas as redes 🎉');
   } catch (err) {
-    toast('Erro ao conectar: ' + err.message);
+    toast('Erro ao conectar: ' + (err?.message || err));
   }
 }
 
 async function disconnectSupabase() {
-  if (!confirm('Desconectar da nuvem Supabase? O aplicativo continuará funcionando no modo local.')) return;
+  if (!confirm('Desconectar da nuvem Supabase? O aplicativo voltará para o modo local (apenas neste aparelho).')) return;
   await Cloud.disconnect();
   closeModal();
   render();
@@ -6138,8 +6323,21 @@ async function disconnectSupabase() {
     if (Cloud.enabled) {
       try {
         u = await Cloud.restore();
-        await ensureAllFinancesAndMigrate();
-      } catch (e) { console.error('Cloud restore error:', e); }
+        if (!DB || !Array.isArray(DB.users) || !DB.users.length) {
+          await syncFromLocalStore();
+          if (!DB || !Array.isArray(DB.users) || !DB.users.length) await seed();
+          await ensureAllFinancesAndMigrate();
+          Cloud.syncNow(true).catch(() => {});
+        } else {
+          await ensureAllFinancesAndMigrate();
+        }
+      } catch (e) {
+        console.error('Cloud restore error:', e);
+        await syncFromLocalStore();
+        if (!DB || !Array.isArray(DB.users) || !DB.users.length) await seed();
+        const sid = sessionStorage.getItem('personalhub_sess') || localStorage.getItem('personalhub_sess');
+        u = sid && userById(sid);
+      }
     } else {
       await load();
       const sid = sessionStorage.getItem('personalhub_sess') || localStorage.getItem('personalhub_sess');
@@ -6147,7 +6345,7 @@ async function disconnectSupabase() {
     }
     if (u && u.active) {
       S.user = u;
-      S.view = u.role === 'student' ? 'profile' : 'home';
+      S.view = u.role === 'student' ? 'workout' : 'home';
       if (u.role === 'student') startReminders();
     }
   } catch (err) {
@@ -6155,5 +6353,15 @@ async function disconnectSupabase() {
   } finally {
     render();
   }
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      try { reg.update(); } catch {}
+    }).catch(() => { });
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!window._swRefreshing) {
+        window._swRefreshing = true;
+        window.location.reload();
+      }
+    });
+  }
 })();
